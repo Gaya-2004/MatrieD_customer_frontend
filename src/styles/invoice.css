@@ -1,0 +1,518 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap');
+
+.invoice-page {
+  height: 100vh;
+  height: 100dvh;
+  overflow-y: auto;
+  background-color: #f3f4f6;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 1.5rem 1rem;
+  font-family: 'Poppins', sans-serif;
+}
+
+.invoice-container {
+  width: 100%;
+  max-width: 509px;
+  background-color: #ffffff;
+  border-radius: 1rem;
+  overflow: hidden;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
+/* Banner */
+.invoice-banner {
+  position: relative;
+  margin: 2rem 1.5rem 0.25rem 1.5rem;
+}
+
+.banner-img {
+  width: 100%;
+  height: 151px;
+  object-fit: cover;
+  border-radius: 0.5rem;
+}
+
+.banner-text {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 600;
+  font-size: 1rem;
+  letter-spacing: 6.72px;
+  text-transform: uppercase;
+  text-shadow: 0 2px 2px rgba(0, 0, 0, 0.61);
+  margin: 0;
+}
+
+.banner-indicators {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.indicator {
+  height: 4px;
+  border-radius: 9999px;
+  background-color: rgba(255, 255, 255, 0.5);
+  flex: 1;
+}
+
+.indicator.active {
+  background-color: #ffffff;
+  flex: 1.2;
+}
+
+/* Header */
+.invoice-header {
+  background-color: #ffffff;
+  box-shadow: 0 4px 19px 0 rgba(0, 0, 0, 0.10);
+  padding: 0 1.5rem 1rem 1.5rem;
+  margin-top: 1rem;
+  text-align: center;
+}
+
+.invoice-logo {
+  height: 69px;
+  width: auto;
+  object-fit: contain;
+  margin-bottom: 0.25rem;
+}
+
+.invoice-address-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 0.5rem;
+  justify-content: center;
+  text-align: left;
+}
+
+.bold-text {
+  color: #000000;
+  font-weight: 600;
+}
+
+.address-text {
+  color: #000000;
+  font-weight: 500;
+  font-size: 13px;
+  flex: 1;
+  min-width: 160px;
+  margin-top: 2px;
+}
+
+.location-link {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: #FF3400;
+  font-size: 12px;
+  text-decoration: underline;
+  white-space: nowrap;
+}
+
+/* Experience Rating */
+.experience-section {
+  background-color: #F1F5F8;
+  padding: 1.5rem;
+}
+
+.experience-title {
+  color: #000000;
+  font-weight: 600;
+  font-size: 1rem;
+  text-align: center;
+  margin-bottom: 1rem;
+}
+
+.rating-buttons {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2rem;
+}
+
+.rating-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: transform 0.2s;
+  padding: 10px;
+  border-radius: 50%;
+}
+
+.rating-btn:hover {
+  transform: scale(1.05);
+}
+
+.rating-btn.active {
+  transform: scale(1.1);
+}
+
+.rating-btn.active.happy { background-color: rgba(0, 160, 29, 0.1); }
+.rating-btn.active.neutral { background-color: rgba(214, 169, 6, 0.1); }
+.rating-btn.active.sad { background-color: rgba(241, 0, 0, 0.1); }
+
+
+/* Invoice Details */
+.invoice-details {
+  padding: 1.5rem 1.25rem;
+}
+
+.company-header {
+  text-align: center;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #D4D4D4;
+}
+
+.company-name {
+  color: #000000;
+  font-weight: 600;
+  font-size: 1rem;
+  margin-bottom: 0.25rem;
+}
+
+.company-info {
+  color: #000000;
+  font-size: 14px;
+  margin: 0.25rem 0;
+}
+
+.company-gst {
+  color: #000000;
+  font-weight: 600;
+  font-size: 1rem;
+  margin-top: 0.25rem;
+}
+
+.invoice-title {
+  text-align: center;
+  padding: 1rem 0;
+  border-bottom: 1px solid #D4D4D4;
+  color: #000000;
+  font-weight: 600;
+  font-size: 1.25rem;
+}
+
+.invoice-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 1rem 0;
+  border-bottom: 1px solid #D4D4D4;
+  gap: 1rem;
+}
+
+.meta-left {
+  font-size: 14px;
+  line-height: 1.8;
+  letter-spacing: 0.7px;
+  text-transform: uppercase;
+  color: #585555;
+}
+
+.meta-right {
+  color: #000000;
+  font-weight: 600;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+/* Items Table */
+.invoice-table {
+  padding: 1rem 0;
+  border-bottom: 1px solid #D4D4D4;
+}
+
+.table-header, .table-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.table-header div {
+  color: #000000;
+  font-weight: 600;
+  font-size: 14px;
+  text-transform: uppercase;
+}
+
+.table-row div {
+  color: #5E5E5E;
+  font-weight: 500;
+  font-size: 14px;
+  text-transform: uppercase;
+}
+
+.invoice-totals {
+  padding: 1rem 0;
+  border-bottom: 1px solid #D4D4D4;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.totals-labels, .totals-values {
+  color: #000000;
+  font-weight: 600;
+  font-size: 14px;
+  text-transform: uppercase;
+  line-height: 1.7;
+}
+
+.totals-values {
+  text-align: right;
+}
+
+/* Tax Breakdown */
+.tax-breakdown {
+  padding: 1rem 0;
+  border-bottom: 1px solid #D4D4D4;
+}
+
+.tax-title {
+  color: #000000;
+  font-weight: 600;
+  font-size: 1rem;
+  text-transform: uppercase;
+  text-align: center;
+  margin-bottom: 0.75rem;
+}
+
+.tax-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.25rem;
+  text-align: center;
+}
+
+.tax-col p {
+  margin: 0;
+}
+
+/* Payment Delivery */
+.payment-delivery {
+  padding: 1rem 0;
+  border-bottom: 1px solid #D4D4D4;
+}
+
+.payment-title {
+  color: #000000;
+  font-weight: 600;
+  font-size: 1rem;
+  text-transform: uppercase;
+  margin-bottom: 0.5rem;
+}
+
+.payment-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: #666;
+  font-weight: 500;
+  font-size: 14px;
+  text-transform: uppercase;
+}
+
+.total-received {
+  margin-top: 0.25rem;
+  color: #000000;
+  align-items: flex-start;
+}
+
+.items-summary {
+  padding: 1rem 0;
+  border-bottom: 1px solid #D4D4D4;
+}
+
+.items-summary p {
+  color: #000000;
+  font-weight: 600;
+  font-size: 14px;
+  text-transform: uppercase;
+  margin: 0.25rem 0;
+}
+
+.qr-code-section {
+  padding: 1rem 0;
+  display: flex;
+  justify-content: center;
+}
+
+.qr-img {
+  width: 100%;
+  max-width: 384px;
+  height: auto;
+}
+
+.invoice-terms {
+  padding: 0.5rem 0;
+  text-align: center;
+}
+
+.invoice-terms p {
+  color: #000000;
+  font-size: 12px;
+  margin: 0.15rem 0;
+}
+
+/* Follow Us */
+.follow-us {
+  padding-bottom: 2rem;
+  text-align: center;
+}
+
+.follow-title {
+  color: #000000;
+  font-weight: 500;
+  font-size: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.social-qr {
+  width: 180px;
+  height: auto;
+  object-fit: contain;
+  margin: 0 auto;
+}
+
+.insta-handle {
+  font-family: 'Poppins', monospace, sans-serif;
+  font-size: 0.95rem;
+  letter-spacing: 1px;
+  background: -webkit-linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  margin-top: 10px;
+  margin-bottom: 25px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.download-btn-container {
+  display: flex;
+  justify-content: flex-end;
+  padding-right: 1.5rem;
+  margin-top: 1rem;
+}
+
+.download-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background-color: #00a82d;
+  color: white;
+  font-weight: 600;
+  font-size: 15px;
+  padding: 0.6rem 1.25rem;
+  border-radius: 0.5rem;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 12px rgba(0, 168, 45, 0.2);
+}
+
+.download-btn:hover {
+  background-color: #008f26;
+  box-shadow: 0 6px 16px rgba(0, 168, 45, 0.3);
+  transform: translateY(-1px);
+}
+
+/* Mobile Responsive Styles */
+@media (max-width: 480px) {
+  .invoice-page {
+    padding: 0.5rem;
+  }
+
+  .invoice-container {
+    border-radius: 0.75rem;
+  }
+
+  .invoice-banner {
+    margin: 1rem 1rem 0.25rem 1rem;
+  }
+
+  .banner-img {
+    height: 120px;
+  }
+
+  .banner-text {
+    font-size: 0.85rem;
+    letter-spacing: 4px;
+  }
+
+  .invoice-header {
+    padding: 0 1rem 1rem 1rem;
+  }
+
+  .invoice-logo {
+    height: 50px;
+  }
+
+  .invoice-address-bar {
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
+  }
+
+  .address-text {
+    font-size: 11px;
+    min-width: 100%;
+    text-align: center;
+    margin-top: 0;
+  }
+
+  .experience-section, .invoice-details {
+    padding: 1.25rem 1rem;
+  }
+
+  .rating-buttons {
+    gap: 1rem;
+  }
+
+  .company-info, .meta-left, .meta-right, .table-header div, .table-row div, .totals-labels, .totals-values, .tax-grid, .payment-row, .items-summary p, .invoice-terms p {
+    font-size: 12px;
+  }
+
+  .company-name, .company-gst, .tax-title, .payment-title {
+    font-size: 0.9rem;
+  }
+
+  .invoice-meta {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .table-header, .table-row {
+    grid-template-columns: 1fr 50px 35px 60px;
+    gap: 0.25rem;
+  }
+
+  .tax-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+    text-align: center;
+  }
+
+  .qr-img {
+    max-width: 200px;
+  }
+
+  .download-btn-container {
+    padding-right: 0;
+    justify-content: center;
+  }
+
+  .download-btn {
+    width: 100%;
+    justify-content: center;
+    padding: 0.75rem;
+    font-size: 16px;
+  }
+}

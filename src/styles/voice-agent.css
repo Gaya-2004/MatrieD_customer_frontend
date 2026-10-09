@@ -1,0 +1,344 @@
+/* src/styles/voice-agent.css */
+.voice-agent-container {
+  width: 100vw;
+  height: 100vh;
+  position: relative;
+  overflow: hidden;
+  background-size: cover;
+  background-position: center;
+  display: flex;
+  flex-direction: column;
+}
+
+.voice-agent-content {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  padding-top: 60px;
+}
+
+.va-manual-btn {
+  background: #008f51;
+  color: white;
+  border: none;
+  padding: 8px 15px;
+  border-radius: 20px;
+  font-weight: bold;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: background 0.3s;
+}
+.va-manual-btn:hover {
+  background: #007040;
+}
+
+/* Center Avatar Area */
+.va-center-avatar-area {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 30px 0 10px;
+  position: relative;
+  height: 120px;
+}
+
+.va-avatar-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  z-index: 2;
+  margin: 0 10px;
+}
+
+.va-avatar {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+  background: white;
+}
+
+/* Chat Area */
+.va-chat-container {
+  flex: 1;
+  margin: 0 auto;
+  width: 90%;
+  max-width: 900px;
+  background: rgba(255, 255, 255, 0.5);
+  backdrop-filter: blur(15px);
+  border-radius: 20px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+  margin-bottom: 30px;
+  position: relative;
+}
+
+.va-chat-history {
+  flex: 1;
+  padding: 20px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.va-msg {
+  display: flex;
+  gap: 15px;
+  max-width: 80%;
+  animation: vaFadeIn 0.3s ease;
+}
+.va-msg.model {
+  align-self: flex-start;
+}
+.va-msg.user {
+  align-self: flex-end;
+  flex-direction: row-reverse;
+}
+
+.va-msg-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: white;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.va-msg-avatar.user-icon {
+  background: #ff4e00;
+  color: white;
+  font-size: 18px;
+}
+.va-msg-avatar img {
+  width: 80%;
+  height: 80%;
+  object-fit: contain;
+}
+
+.va-msg-bubble {
+  background: white;
+  padding: 12px 18px;
+  border-radius: 18px;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+  font-size: 1.05rem;
+  line-height: 1.4;
+  color: #333;
+}
+.va-msg.user .va-msg-bubble {
+  background: white;
+  color: #333;
+}
+
+/* Input Area */
+.va-input-area {
+  padding: 20px;
+  background: transparent;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+}
+
+.va-input-pill {
+  display: flex;
+  align-items: center;
+  background: white;
+  border-radius: 50px;
+  padding: 8px 10px;
+  width: 90%;
+  max-width: 700px;
+  border: 1px solid #ff4e00;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+  gap: 12px;
+}
+
+.va-icon-btn {
+  width: 45px;
+  height: 45px;
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  border: none;
+  font-size: 1.2rem;
+  cursor: pointer;
+  transition: opacity 0.2s;
+  flex-shrink: 0;
+}
+.va-icon-btn:hover {
+  opacity: 0.8;
+}
+.va-icon-btn.pink {
+  background: #ffebe5;
+  color: #ff4e00;
+}
+.va-icon-btn.grey {
+  background: #e6e6e6;
+  color: #555;
+}
+.va-icon-btn.send {
+  background: #e0e0e0;
+  color: white;
+  margin-left: auto;
+}
+.va-icon-btn.send:hover {
+  background: #ccc;
+}
+
+.va-input-center {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  font-size: 1.1rem;
+  color: #888;
+}
+.va-input-center.listening {
+  font-style: normal;
+  gap: 15px;
+}
+.va-input-center input {
+  width: 100%;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 1.1rem;
+  color: #333;
+}
+.va-input-center input::placeholder {
+  color: #aaa;
+}
+
+.va-small-waves {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  height: 20px;
+}
+.va-small-wave-bar {
+  width: 3px;
+  background: #ff4e00;
+  border-radius: 3px;
+  animation: va-small-wave 1s infinite ease-in-out;
+}
+@keyframes va-small-wave {
+  0%, 100% { height: 4px; }
+  50% { height: 20px; }
+}
+
+.va-speaker-btn {
+  position: absolute;
+  right: 20px;
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: white;
+  border: none;
+  color: #999;
+  font-size: 20px;
+  cursor: pointer;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  transition: 0.3s;
+}
+.va-speaker-btn.muted {
+  color: #ff4e00;
+}
+.va-speaker-btn:hover {
+  background: #f0f0f0;
+}
+
+.va-audio-waves {
+  flex: 1;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  height: 30px;
+}
+.va-audio-bar {
+  width: 4px;
+  background: #ccc;
+  border-radius: 2px;
+  transition: height 0.1s;
+}
+.va-audio-bar.active {
+  background: #ff4e00;
+}
+
+.va-mic-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: none;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: white;
+  cursor: pointer;
+  font-size: 16px;
+  flex-shrink: 0;
+  transition: transform 0.2s;
+}
+.va-mic-btn:hover {
+  transform: scale(1.1);
+}
+.va-mic-btn.recording {
+  background: #e74c3c;
+  animation: vaPulse 1.5s infinite;
+}
+.va-mic-btn.idle {
+  background: #008f51;
+}
+
+@keyframes vaFadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes vaPulse {
+  0% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0.7); }
+  70% { box-shadow: 0 0 0 15px rgba(231, 76, 60, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0); }
+}
+
+/* Category Grid in Chat */
+.va-cat-grid {
+  display: flex;
+  gap: 15px;
+  overflow-x: auto;
+  padding-bottom: 10px;
+  scrollbar-width: none;
+  margin-top: 15px;
+}
+.va-cat-item {
+  min-width: 120px;
+  background: #f8f8f8;
+  padding: 15px;
+  border-radius: 12px;
+  text-align: center;
+  border: 1px solid #eee;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.va-cat-img {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  object-fit: cover;
+}
