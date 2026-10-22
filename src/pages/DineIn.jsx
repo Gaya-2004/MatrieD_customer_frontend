@@ -1,723 +1,1254 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react'
-import { useNavigate, useLocation } from 'react-router-dom'
+import React, { useState, useEffect, useMemo, useRef } from 'react'
+import { useNavigate, useSearchParams, useLocation } from 'react-router-dom'
 import { useLanguage } from '../context/LanguageContext'
 import { useCart } from '../context/CartContext'
-import { useVoiceAgent } from '../context/VoiceAgentContext'
 import Header from '../components/Header'
-import '../styles/pages.css'
+import { DEFAULT_CATEGORIES, DEFAULT_MENU_ITEMS, FLOW5_MENU_ITEMS } from '../data/menuData'
 import '../styles/dinein.css'
 import '../styles/home.css'
 
-function MenuCard({ item, qty, onAdd, onInc, onDec, onUpdateQty, hasActiveOrder }) {
-  const { t, language } = useLanguage()
-  const [imgError, setImgError] = useState(false)
-  return (
-    <div className="fg-card">
-      <div className="fg-card-image-wrap">
-        {item.image && !imgError ? (
-          <img
-            src={item.image}
-            alt={item.name}
-            className="fg-card-img"
-            onError={() => setImgError(true)}
-          />
-        ) : (
-          <div className="di-card-emoji-wrap">
-            <span className="di-card-emoji">{item.emoji || '🍽️'}</span>
-          </div>
-        )}
-      </div>
-
-      <div className="fg-card-content">
-        <h3 className="fg-card-title">
-          {language === 'Tamil' && item.tamilName ? item.tamilName : item.name}
-        </h3>
-        <p className="fg-card-desc">{language === 'Tamil' && item.tamilDesc ? item.tamilDesc : item.description}</p>
-      </div>
-
-      <div className="fg-card-footer">
-        <span className="fg-card-price">Rs. {item.price}</span>
-        <div className={`fg-card-status ${item.available ? 'avail' : 'unavail'}`}>
-          <span className="fg-card-dot" />
-          {item.available ? t('available') : t('notAvailable')}
-        </div>
-      </div>
-
-      <div className="fg-card-controls">
-        {hasActiveOrder ? (
-          <div className="fg-qty-container" style={{ opacity: 0.5 }}>
-            <span style={{ fontSize: '0.9rem', color: '#666', fontWeight: 'bold' }}>Active Order In Progress</span>
-          </div>
-        ) : (
-          <div className="fg-qty-container">
-            <button onClick={() => onDec(item.id)} className="fg-qty-btn minus" disabled={qty === 0}>
-              <span>−</span>
-            </button>
-            <div className="fg-qty-display">
-              <input
-                type="text"
-                inputMode="numeric"
-                value={qty === 0 ? '' : qty}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  if (val === '') {
-                    if (qty > 0) onUpdateQty(item.id, 0);
-                    return;
-                  }
-                  const num = parseInt(val, 10);
-                  if (!isNaN(num) && num >= 0) {
-                    if (qty === 0 && num > 0) {
-                      onAdd(item, num);
-                    } else {
-                      onUpdateQty(item.id, num);
-                    }
-                  }
-                }}
-                onBlur={(e) => {
-                  if (e.target.value === '') {
-                    onUpdateQty(item.id, 0);
-                  }
-                }}
-                placeholder="0"
-                style={{
-                  width: '100%',
-                  border: 'none',
-                  textAlign: 'center',
-                  background: 'transparent',
-                  fontWeight: '600',
-                  fontFamily: 'inherit',
-                  fontSize: '1.2rem',
-                  color: '#333',
-                  outline: 'none'
-                }}
-              />
-            </div>
-            <button onClick={() => item.available ? (qty === 0 ? onAdd(item) : onInc(item.id)) : null} className="fg-qty-btn plus" disabled={!item.available}>
-              <span>+</span>
-            </button>
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
 export default function DineIn() {
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const location = useLocation()
   const { t, language } = useLanguage()
-  const { isAgentOpen } = useVoiceAgent()
   const {
     cart,
-    setCart,
     addToCart,
     changeQty,
-    updateItemQuantity,
+    removeCartItem,
     updateNote,
-    isCartOpen,
-    setIsCartOpen,
-    totalItems,
-    subtotal: totalAmount,
+    clearCart,
     tableNumber,
-    activeCategory,
-    setActiveCategory,
-    setTableNumber,
-    hasActiveOrder
+    setTableNumber
   } = useCart()
 
-  const [searchQuery, setSearchQuery] = useState('')
+  // Parse initial flow: 1=Home, 2=Full Menu, 3=Prompt Bubble, 4=Voice Agent, 5=Conversation
+  const initialFlow = (() => {
+    const p = searchParams.get('flow')
+    if (p) return parseInt(p, 10)
+    if (location.state?.flow) return location.state.flow
+    if (location.state?.openVoiceAgent) return 4
+    return 2
+  })()
 
-  const [topHeight] = useState(100)
-  const [cardScale] = useState(1.0)
+  const [flow, setFlowState] = useState(initialFlow)
+  const [showGreetingBubble, setShowGreetingBubble] = useState(initialFlow === 3)
+  const [isSidebarOpen, setIsSidebarOpen] = useState(initialFlow === 4 || initialFlow === 5)
+  const [sidebarMode, setSidebarMode] = useState(
+    initialFlow === 5 ? 'voice_conversation' : (initialFlow === 4 ? 'voice_prompt' : 'cart')
+  )
+  const [agentInputText, setAgentInputText] = useState('')
+  const menuContainerRef = useRef(null)
 
-  const [activeRegion, setActiveRegion] = useState('all')
-  const [menuCategories, setMenuCategories] = useState([{ id: 'all', name: 'All', image: null, region: 'all' }])
-  const [menuItems, setMenuItems] = useState({ all: [] })
-  const [loading, setLoading] = useState(true)
+  // Dynamic voice chat messages starting with greeting
+  const INITIAL_AGENT_GREETING = {
+    id: 'agent-greet-1',
+    sender: 'agent',
+    text: 'Hello, what would you like to eat today?'
+  }
 
-  const getQty = id => cart.find(c => c.id === id)?.quantity ?? 0
-  const [showFilterDropdown, setShowFilterDropdown] = useState(false)
-  const [filterOption, setFilterOption] = useState('all')
-  const [sortOption, setSortOption] = useState('default')
-  const filterDropdownRef = useRef(null)
+  const [chatMessages, setChatMessages] = useState([INITIAL_AGENT_GREETING])
+  const [isAgentTyping, setIsAgentTyping] = useState(false)
+  const chatStreamRef = useRef(null)
+
+  const scrollToChatBottom = () => {
+    if (chatStreamRef.current) {
+      setTimeout(() => {
+        if (chatStreamRef.current) {
+          chatStreamRef.current.scrollTop = chatStreamRef.current.scrollHeight
+        }
+      }, 50)
+    }
+  }
 
   useEffect(() => {
-    if (activeRegion !== 'all') {
-      const validCats = menuCategories.filter(c => c.region === 'all' || c.region === activeRegion);
-      if (!validCats.find(c => c.id === activeCategory)) {
-        setActiveCategory('all');
-      }
-    }
-  }, [activeRegion, menuCategories, activeCategory, setActiveCategory]);
+    scrollToChatBottom()
+  }, [chatMessages, isAgentTyping])
 
-  const [showTableModal, setShowTableModal] = useState(false)
-  const [tableInput, setTableInput] = useState('')
-
-  const handleCloseModal = () => {
-    setShowTableModal(false)
-  }
-
-  const formatTableNumber = (val) => {
-    const clean = val.trim().toUpperCase()
-    if (/^T-\d+$/.test(clean)) {
-      return clean.replace('T-', '')
-    }
-    if (/^T\d+$/.test(clean)) {
-      return clean.replace('T', '').padStart(2, '0')
-    }
-    const digits = clean.replace(/\D/g, '')
-    if (digits) {
-      return digits.padStart(2, '0')
-    }
-    return '06'
-  }
-
-  const handleSubmitTable = async () => {
-    if (!tableInput.trim()) {
-      alert("Please enter a valid table number.")
+  // Switch flow handler
+  const setFlow = (newFlow) => {
+    setFlowState(newFlow)
+    setSearchParams({ flow: newFlow })
+    setManualDrawerOpen(false)
+    if (newFlow === 1) {
+      navigate('/')
       return
     }
-    const tableNum = formatTableNumber(tableInput)
-    
-    try {
-      const restaurantId = localStorage.getItem('selected_restaurant_id') || '1';
-      const API_BASE = import.meta.env.VITE_API_URL || '';
-      const response = await fetch(`${API_BASE}/api/v1/public/tables/${tableNum}?restaurant_id=${restaurantId}`);
-      
-      if (!response.ok) {
-        if (response.status === 404) {
-          alert("Table not found. Please enter a valid table number.");
+    if (newFlow === 2) {
+      setIsSidebarOpen(false)
+      setShowGreetingBubble(false)
+    } else if (newFlow === 3) {
+      setIsSidebarOpen(false)
+      setShowGreetingBubble(true)
+    } else if (newFlow === 4) {
+      setIsSidebarOpen(true)
+      setShowGreetingBubble(false)
+      setSidebarMode('voice_prompt')
+    } else if (newFlow === 5) {
+      setIsSidebarOpen(true)
+      setShowGreetingBubble(false)
+      setSidebarMode('voice_conversation')
+    }
+  }
+
+  // Speech bubble greeting is active when on Flow 3
+  useEffect(() => {
+    if (flow === 3) {
+      setShowGreetingBubble(true)
+    } else {
+      setShowGreetingBubble(false)
+    }
+  }, [flow])
+
+  const [searchQuery, setSearchQuery] = useState('')
+  const [activeCategory, setActiveCategory] = useState('all')
+  const [filterOption, setFilterOption] = useState('all') // 'all', 'available', 'veg', 'non-veg'
+  const [showFilterDropdown, setShowFilterDropdown] = useState(false)
+
+  // Parse initial flow: 1=Home, 2=Full Menu, 3=Prompt Bubble, 4=Voice Agent, 5=Conversation, 6=Manual Empty, 7=Manual Badge, 8=Manual Overlay
+  const [manualDrawerOpen, setManualDrawerOpen] = useState(initialFlow === 8)
+
+  // Pre-seed sample cart item based on flow
+  useEffect(() => {
+    if (flow === 6) {
+      clearCart()
+      setIsSidebarOpen(false)
+      setManualDrawerOpen(false)
+    } else if (flow === 7) {
+      clearCart()
+      setIsSidebarOpen(false)
+      setManualDrawerOpen(false)
+      const chicken65 = DEFAULT_MENU_ITEMS.find(i => i.name === 'Chicken 65')
+      if (chicken65) addToCart(chicken65, 1)
+    } else if (flow === 8) {
+      clearCart()
+      setIsSidebarOpen(false)
+      setManualDrawerOpen(true)
+      const dosa = {
+        id: 101,
+        name: 'Onion Rava Dosa',
+        tamilName: 'வெங்காய ரவா தோசை',
+        category: 'dosa',
+        price: 100,
+        description: 'Crispy semolina dosa with fine chopped onions, green chillies & spice blend.',
+        image: '/assets/images/dishes/onion_rava_dosa.png',
+        serves: '1',
+        note: 'Please, Just a little bit spicy only....'
+      }
+      const butterChicken = DEFAULT_MENU_ITEMS.find(i => i.name === 'Butter Chicken') || {
+        id: 8,
+        name: 'Butter Chicken',
+        price: 240,
+        serves: '1',
+        description: 'Tender chicken in rich butter tomato gravy served with basmati rice.',
+        image: '/assets/images/dishes/butter_chicken.png',
+        note: 'Please, Just a little bit spicy only....'
+      }
+      addToCart(dosa, 1)
+      addToCart(butterChicken, 1)
+    } else if (cart.length === 0) {
+      const sampleItem = DEFAULT_MENU_ITEMS.find(i => i.name === 'Chicken Biryani')
+      if (sampleItem) {
+        addToCart(sampleItem, 1)
+        setTimeout(() => {
+          updateNote(sampleItem.id, 'Please, Just a little bit spicy only....')
+        }, 100)
+      }
+    }
+  }, [flow])
+
+  // In Flow 4: exactly 8 dishes matching Flow 4 screenshot (4x2)
+  // In Flow 5: Onion Rava Dosa + Chicken selections matching Flow 5 screenshot
+  // In Flow 2 & 3: full 10 dishes (5x2)
+  const activeDataset = useMemo(() => {
+    if (flow === 5) {
+      return FLOW5_MENU_ITEMS
+    }
+    if (flow === 4) {
+      // Flow 4 displays the 8 dishes: Chicken 65, Tandoori Chicken, Fish Fry, Mutton Curry, Egg Curry, Tikka, Butter, Biryani
+      return DEFAULT_MENU_ITEMS.filter(i => i.name !== 'Prawn Fry' && i.name !== 'Chicken Korma')
+    }
+    return DEFAULT_MENU_ITEMS
+  }, [flow])
+
+  // Filter items based on category, search, and availability
+  const filteredItems = useMemo(() => {
+    return activeDataset.filter(item => {
+      // Category filter
+      if (activeCategory !== 'all') {
+        const matchesCategory =
+          item.category === activeCategory ||
+          (item.categoryName && item.categoryName.toLowerCase().includes(activeCategory.toLowerCase()))
+        if (!matchesCategory) return false
+      }
+
+      // Search filter
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase()
+        const matchesName = item.name.toLowerCase().includes(q)
+        const matchesTamil = item.tamilName && item.tamilName.toLowerCase().includes(q)
+        const matchesDesc = item.description && item.description.toLowerCase().includes(q)
+        if (!matchesName && !matchesTamil && !matchesDesc) return false
+      }
+
+      // Availability filter
+      if (filterOption === 'available' && !item.available) return false
+      if (filterOption === 'veg' && !item.isVeg) return false
+      if (filterOption === 'non-veg' && item.isVeg) return false
+
+      return true
+    })
+  }, [activeDataset, activeCategory, searchQuery, filterOption])
+
+  // Get current cart quantity for an item
+  const getItemQty = (id) => {
+    const found = cart.find(i => i.id === id)
+    return found ? (Number(found.quantity) || 0) : 0
+  }
+
+  // Handle Stepper increment/decrement
+  const handleIncrement = (item) => {
+    if (!item.available) return
+    const current = getItemQty(item.id)
+    if (current === 0) {
+      addToCart(item, 1)
+    } else {
+      changeQty(item.id, 1)
+    }
+  }
+
+  const handleDecrement = (item) => {
+    const current = getItemQty(item.id)
+    if (current > 0) {
+      changeQty(item.id, -1)
+    }
+  }
+
+  // Flow 4 Suggestion prompts
+  const PROMPTS = [
+    'Show me popular items',
+    'Add 2 Masala Dosa to my cart',
+    "What are today's specials?",
+    'Talk to waiter'
+  ]
+
+  // Dynamic chat responder based on user input
+  const handleSendMessage = (userText) => {
+    if (!userText || !userText.trim()) return
+    const cleanText = userText.trim()
+    setAgentInputText('')
+
+    // Add user message to conversation stream
+    const userMsg = {
+      id: `user-${Date.now()}`,
+      sender: 'user',
+      text: cleanText
+    }
+    setChatMessages(prev => [...prev, userMsg])
+    setIsAgentTyping(true)
+    scrollToChatBottom()
+
+    setTimeout(() => {
+      const lower = cleanText.toLowerCase()
+      let agentReply = {
+        id: `agent-${Date.now()}`,
+        sender: 'agent',
+        text: ''
+      }
+
+      // 1. Specific Order / Add commands
+      if (lower.includes('order') || lower.includes('add') || lower.includes('want') || lower.includes('please order')) {
+        let matched = null
+        if (lower.includes('biryani')) {
+          matched = DEFAULT_MENU_ITEMS.find(i => i.name.toLowerCase().includes('biryani')) || {
+            id: 9,
+            name: 'Chicken Biryani',
+            price: 210,
+            image: '/assets/images/dishes/chicken_biryani.png'
+          }
+        } else if (lower.includes('butter chicken') || lower.includes('butter')) {
+          matched = DEFAULT_MENU_ITEMS.find(i => i.name.toLowerCase().includes('butter')) || {
+            id: 8,
+            name: 'Butter Chicken',
+            price: 240,
+            image: '/assets/images/dishes/butter_chicken.png'
+          }
+        } else if (lower.includes('tikka')) {
+          matched = DEFAULT_MENU_ITEMS.find(i => i.name.toLowerCase().includes('tikka')) || {
+            id: 7,
+            name: 'Chicken Tikka Masala',
+            price: 220,
+            image: '/assets/images/dishes/chicken_tikka_masala.png'
+          }
+        } else if (lower.includes('dosa') || lower.includes('rava')) {
+          matched = FLOW5_MENU_ITEMS.find(i => i.name.toLowerCase().includes('dosa')) || {
+            id: 101,
+            name: 'Onion Rava Dosa',
+            price: 100,
+            image: '/assets/images/dishes/onion_rava_dosa.png'
+          }
+        } else if (lower.includes('coffee') || lower.includes('filter')) {
+          matched = FLOW5_MENU_ITEMS.find(i => i.name.toLowerCase().includes('coffee')) || {
+            id: 102,
+            name: 'Special Filter Coffee',
+            price: 45,
+            image: '/assets/images/dishes/filter_coffee.png'
+          }
+        } else if (lower.includes('chicken 65')) {
+          matched = DEFAULT_MENU_ITEMS.find(i => i.name.toLowerCase().includes('chicken 65')) || {
+            id: 1,
+            name: 'Chicken 65',
+            price: 180,
+            image: '/assets/images/dishes/chicken_65.png'
+          }
+        } else if (lower.includes('chicken')) {
+          matched = DEFAULT_MENU_ITEMS.find(i => i.name.toLowerCase().includes('biryani')) || {
+            id: 9,
+            name: 'Chicken Biryani',
+            price: 210,
+            image: '/assets/images/dishes/chicken_biryani.png'
+          }
+        }
+
+        if (matched) {
+          addToCart(matched, 1)
+          agentReply.text = `I have added 1x ${matched.name} (Rs. ${matched.price}) to your cart! Would you like anything else or a drink with it?`
         } else {
-          alert("Error verifying table status. Please try again.");
-        }
-        return;
-      }
-      
-      const data = await response.json();
-      if (data.is_active === false) {
-        alert("This table is currently inactive.");
-        return;
-      }
-      if (data.status.toLowerCase() !== 'vacant') {
-        alert(`This table is currently ${data.status}. Please select a vacant table.`);
-        return;
-      }
-      
-      setTableNumber(tableNum)
-      localStorage.setItem('active_table_number', tableNum)
-      setShowTableModal(false)
-      const pendingPayment = sessionStorage.getItem('pending_ai_payment')
-      if (pendingPayment) {
-        sessionStorage.removeItem('pending_ai_payment')
-        navigate('/payment', { state: { autoConfirmMethod: pendingPayment } })
-      }
-    } catch (error) {
-      console.error("Error verifying table:", error);
-      alert("Failed to verify table. Please check your connection.");
-    }
-  }
-
-  useEffect(() => {
-    const handleOpenTableModal = () => {
-      setShowTableModal(true);
-      setTableInput('');
-    };
-    const handleSimulateScan = (e) => {
-      const tableNum = e.detail?.tableNumber || '06';
-      setTableNumber(tableNum);
-      localStorage.setItem('active_table_number', tableNum);
-      setShowTableModal(false);
-    };
-    const handleChangeCategory = (e) => {
-      const catId = e.detail?.categoryId;
-      if (catId) {
-        setActiveCategory(catId);
-        // Automatically switch region if it's North Indian
-        const catObj = menuCategories.find(c => String(c.id) === String(catId));
-        if (catObj) {
-          const isNorthIndian = (name) => {
-             const lower = name.toLowerCase();
-             return lower.includes('north indian') || lower.includes('tandoori') || lower.includes('noodles') || lower.includes('salad') || lower.includes('raitha') || lower.includes('soups');
-          };
-          setActiveRegion(isNorthIndian(catObj.name) ? 'north' : 'south');
+          agentReply.text = "I'd be glad to add that for you! Could you please specify which dish from the menu you would like?"
         }
       }
-    };
-
-    const handleChangeRegion = (e) => {
-      const region = e.detail?.region;
-      if (region) {
-        setActiveRegion(region);
-        setActiveCategory('all');
-      }
-    };
-    
-    document.addEventListener('open-table-modal', handleOpenTableModal);
-    document.addEventListener('simulate-scan-success', handleSimulateScan);
-    document.addEventListener('change-category', handleChangeCategory);
-    document.addEventListener('change-region', handleChangeRegion);
-    
-    return () => {
-      document.removeEventListener('open-table-modal', handleOpenTableModal);
-      document.removeEventListener('simulate-scan-success', handleSimulateScan);
-      document.removeEventListener('change-category', handleChangeCategory);
-      document.removeEventListener('change-region', handleChangeRegion);
-    };
-  }, [menuCategories, setActiveCategory, setActiveRegion]);
-
-  useEffect(() => {
-    function handleClickOutside(event) {
-      if (filterDropdownRef.current && !filterDropdownRef.current.contains(event.target)) {
-        setShowFilterDropdown(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, []);
-
-  useEffect(() => {
-    requestAnimationFrame(() => {
-      setIsCartOpen(false)
-    })
-
-    // Fetch menu data from backend
-    async function fetchMenuData() {
-      try {
-        const restaurantId = localStorage.getItem('selected_restaurant_id') || '1';
-        const API_BASE = import.meta.env.VITE_API_URL || '';
-        
-        const catRes = await fetch(`${API_BASE}/api/v1/public/menu/categories?restaurant_id=${restaurantId}`);
-        const dbCategories = await catRes.json();
-
-        const itemRes = await fetch(`${API_BASE}/api/v1/public/menu/items?restaurant_id=${restaurantId}`);
-        const dbItems = await itemRes.json();
-
-        const cleanCategoryName = (name) => {
-          if (!name) return '';
-          let clean = name.trim();
-          clean = clean.replace(/\s*\(.*?\)\s*/g, ' ').trim();
-          clean = clean.replace(/varities/ig, 'Varieties');
-          return clean;
-        };
-
-        const isNorthIndian = (name) => {
-           const lower = name.toLowerCase();
-           return lower.includes('north indian') || lower.includes('tandoori') || lower.includes('noodles') || lower.includes('salad') || lower.includes('raitha') || lower.includes('soups');
-        };
-
-        const catIdMap = {};
-        const uniqueCategories = [];
-        const seenNames = new Map();
-
-        for (const cat of dbCategories) {
-          const cleanedName = cleanCategoryName(cat.name);
-          if (!cleanedName) continue;
-          if (cleanedName.includes('_')) continue;
-          
-          const normName = cleanedName.toLowerCase();
-          if (!seenNames.has(normName)) {
-            seenNames.set(normName, cat.id);
-            uniqueCategories.push({ ...cat, name: cleanedName });
-            catIdMap[cat.id] = cat.id;
-          } else {
-            catIdMap[cat.id] = seenNames.get(normName);
-          }
+      // 2. Chicken / Non-veg inquiry
+      else if (lower.includes('chicken') || lower.includes('non-veg') || lower.includes('non veg') || lower.includes('meat')) {
+        setFilterOption('non-veg')
+        agentReply.text = 'Here are our popular Non-Veg Favourites! You can choose a category below or explore the dishes on the left.'
+        agentReply.richCard = {
+          title: 'Non-Veg Favourites :',
+          categories: [
+            { name: 'Breakfast', img: '/assets/images/dishes/cat_breakfast.png' },
+            { name: 'Lunch', img: '/assets/images/dishes/cat_lunch.png' },
+            { name: 'Dinner', img: '/assets/images/dishes/cat_dinner.png' }
+          ]
         }
-
-        const formattedCategories = [
-          { id: 'all', name: 'All', image: null, region: 'all' },
-          ...uniqueCategories.map(c => ({
-            id: String(c.id),
-            name: c.name,
-            image: c.image_url ? (c.image_url.startsWith('http') ? c.image_url : `${API_BASE}${c.image_url}`) : null,
-            region: isNorthIndian(c.name) ? 'north' : 'south'
-          }))
-        ];
-
-        const formattedItems = {};
-        const allItems = [];
-
-        // Deduplicate items: keep only the highest ID for a given name
-        const uniqueItemsMap = new Map();
-        dbItems.forEach(item => {
-          const normName = (item.name || '').trim().toLowerCase();
-          const existing = uniqueItemsMap.get(normName);
-          if (!existing || item.id > existing.id) {
-            uniqueItemsMap.set(normName, item);
-          }
-        });
-        const deduplicatedDbItems = Array.from(uniqueItemsMap.values());
-
-        deduplicatedDbItems.forEach(item => {
-          const rawCatId = item.category_id;
-          const catId = String(catIdMap[rawCatId] || rawCatId);
-          const formattedItem = {
-            id: Number(item.id),
-            itemCode: item.item_code || String(item.id),
-            name: item.name,
-            tamilName: item.name, // Fallback to english if tamil not available
-            price: Number(item.price),
-            image: item.image_url ? (item.image_url.startsWith('http') ? item.image_url : `${API_BASE}${item.image_url}`) : null,
-            description: item.description,
-            tamilDesc: item.description,
-            available: item.is_available,
-            emoji: '🍽️'
-          };
-
-          if (!formattedItems[catId]) {
-            formattedItems[catId] = [];
-          }
-          formattedItems[catId].push(formattedItem);
-          allItems.push(formattedItem);
-        });
-
-        formattedItems.all = allItems.filter((v, i, a) => a.findIndex(t => t.id === v.id) === i);
-
-        setMenuCategories(formattedCategories);
-        setMenuItems(formattedItems);
-      } catch (err) {
-        console.error("Error fetching menu data:", err);
-      } finally {
-        setLoading(false);
       }
+      // 3. Veg inquiry
+      else if (lower.includes('veg') || lower.includes('vegetarian') || lower.includes('dosa')) {
+        setFilterOption('veg')
+        agentReply.text = "We have wonderful vegetarian dishes! Crispy Onion Rava Dosa, Masala Dosa, and fresh Filter Coffee. I've highlighted them for you on the left."
+      }
+      // 4. Specials / Popular
+      else if (lower.includes('special') || lower.includes('popular') || lower.includes('recommend') || lower.includes('best')) {
+        agentReply.text = "Today's chef specials are our aromatic Chicken Biryani, Butter Chicken with Naan, and South Indian Filter Coffee. Would you like me to order one for you?"
+      }
+      // 5. Waiter / Service
+      else if (lower.includes('waiter') || lower.includes('service') || lower.includes('call') || lower.includes('manager')) {
+        agentReply.text = 'I have alerted your server for Table 06. A staff member will be at your table shortly!'
+      }
+      // 6. Greetings
+      else if (lower.includes('hi') || lower.includes('hello') || lower.includes('hey')) {
+        agentReply.text = "Hello! What can I get for you today? Ask me for recommendations or let me know what you'd like to order."
+      }
+      // 7. Cart / Checkout
+      else if (lower.includes('cart') || lower.includes('bill') || lower.includes('checkout') || lower.includes('total')) {
+        agentReply.text = `You currently have items in your cart. You can tap "View Cart & Place Order" below to review and confirm!`
+      }
+      // 8. Fallback
+      else {
+        agentReply.text = "I'm your Maitre D assistant! Feel free to ask me to show chicken or vegetarian dishes, recommend specials, or say 'Please order one Chicken Biryani'."
+      }
+
+      setIsAgentTyping(false)
+      setChatMessages(prev => [...prev, agentReply])
+      scrollToChatBottom()
+    }, 450)
+  }
+
+  const handlePromptClick = (promptText) => {
+    setFlow(5)
+    setTimeout(() => {
+      handleSendMessage(promptText)
+    }, 150)
+  }
+
+  const handleSendInput = (e) => {
+    e?.preventDefault()
+    if (!agentInputText.trim()) return
+    const text = agentInputText
+    if (flow !== 5) {
+      setFlow(5)
     }
-    fetchMenuData();
-  }, [])
-  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768)
-  const [showAllItems, setShowAllItems] = useState(false)
+    handleSendMessage(text)
+  }
 
-  useEffect(() => {
-    const handleResize = () => {
-      setIsMobile(window.innerWidth <= 768)
+  const scrollToLeftMenu = () => {
+    if (menuContainerRef.current) {
+      menuContainerRef.current.scrollIntoView({ behavior: 'smooth' })
+      menuContainerRef.current.classList.add('highlight-flash')
+      setTimeout(() => {
+        menuContainerRef.current?.classList.remove('highlight-flash')
+      }, 1000)
     }
-    window.addEventListener('resize', handleResize)
-    return () => window.removeEventListener('resize', handleResize)
-  }, [])
-
-  useEffect(() => {
-    setShowAllItems(false)
-  }, [activeCategory])
-
-  const baseItems = activeCategory === 'all' ? menuItems.all : (menuItems[activeCategory] || []);
-
-  // Apply search, filters and sorting
-  let processedItems = [...baseItems]
-  if (searchQuery.trim()) {
-    processedItems = processedItems.filter(i => {
-      const name = language === 'Tamil' && i.tamilName ? i.tamilName : i.name;
-      const code = i.itemCode ? i.itemCode.toLowerCase() : '';
-      const query = searchQuery.toLowerCase();
-      return name.toLowerCase().includes(query) || code.includes(query);
-    })
-  }
-  if (filterOption === 'available') {
-    processedItems = processedItems.filter(i => i.available)
-  }
-  if (sortOption === 'price-asc') {
-    processedItems.sort((a, b) => a.price - b.price)
-  } else if (sortOption === 'price-desc') {
-    processedItems.sort((a, b) => b.price - a.price)
   }
 
-  const displayItems = (isMobile && !showAllItems) ? processedItems.slice(0, 6) : processedItems
+  // Get wireframe title header
+  const getWireframeTitle = () => {
+    if (flow === 2 || flow === 3) return 'Maitre D · Home full menu'
+    if (flow === 4) return 'Maitre D · Home voice agent'
+    if (flow === 5) return 'Maitre D · Home agent conversation'
+    if (flow === 6) return 'Maitre D · Manual menu empty cart'
+    if (flow === 7) return 'Maitre D · Manual menu cart badge'
+    if (flow === 8) return 'Maitre D · Manual cart overlay'
+    return 'Maitre D · Home'
+  }
 
   return (
-    <div className={`app-container ${isAgentOpen ? 'agent-open' : ''}`}>
-      <div className="background-image" />
-      <Header tableNumber={tableNumber} showFullHeader={true} useTitleImage={true} onTableClick={() => setShowScanner(true)} />
+    <div className="menu-page-container">
+      {/* Top Header Navigation matching the Wireframe */}
+      <Header
+        tableNumber={tableNumber || '06'}
+        menuWireframeHeader={true}
+        showDateTime={true}
+        showServiceBell={false}
+        onTableClick={() => {
+          const next = prompt('Enter Table Number:', tableNumber || '06')
+          if (next) setTableNumber(next)
+        }}
+      />
 
-      <main className="di-main">
-        <div className="di-seg-top">
-          <div className="di-topbar">
-            <div className="di-search-wrap">
-              <input
-                className="di-search-input"
-                placeholder={t('searchPlaceholder')}
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                onKeyDown={e => {
-                  if (e.key === 'Enter') {
-                    const query = searchQuery.trim().toLowerCase();
-                    if (!query) return;
+      {/* Main 2-Column Content */}
+      <main className={`menu-main-layout ${!isSidebarOpen ? 'sidebar-collapsed' : ''}`}>
+        {/* Left Column: Menu Items */}
+        <section className="menu-left-column" ref={menuContainerRef}>
+          {/* Top Card: Search, Filter, New Order & Category Pills */}
+          <div className="menu-top-card">
+            <div className="menu-search-row">
+              {/* Search Bar */}
+              <div className="menu-search-bar">
+                <input
+                  type="text"
+                  className="menu-search-input"
+                  placeholder={t('searchPlaceholder') || 'Search for food......'}
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+                <i className="fa-solid fa-magnifying-glass menu-search-icon" />
+              </div>
 
-                    let itemToAdd = processedItems.find(i => i.itemCode && i.itemCode.toLowerCase() === query);
-                    if (!itemToAdd && processedItems.length === 1) {
-                      itemToAdd = processedItems[0];
-                    }
+              {/* Filter Button */}
+              <div style={{ position: 'relative' }}>
+                <button
+                  className="menu-filter-btn"
+                  onClick={() => setShowFilterDropdown(!showFilterDropdown)}
+                  title="Filter options"
+                  type="button"
+                >
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="4" y1="21" x2="4" y2="14" />
+                    <line x1="4" y1="10" x2="4" y2="3" />
+                    <line x1="12" y1="21" x2="12" y2="12" />
+                    <line x1="12" y1="8" x2="12" y2="3" />
+                    <line x1="20" y1="21" x2="20" y2="16" />
+                    <line x1="20" y1="12" x2="20" y2="3" />
+                    <line x1="1" y1="14" x2="7" y2="14" />
+                    <line x1="9" y1="8" x2="15" y2="8" />
+                    <line x1="17" y1="16" x2="23" y2="16" />
+                  </svg>
+                </button>
 
-                    if (itemToAdd && itemToAdd.available && !hasActiveOrder) {
-                      const qty = getQty(itemToAdd.id);
-                      if (qty === 0) {
-                        addToCart(itemToAdd);
-                      } else {
-                        changeQty(itemToAdd.id, 1);
-                      }
-                      setSearchQuery('');
-                    }
-                  }
-                }}
-              />
-              <i className="fa-solid fa-magnifying-glass di-search-icon" />
-            </div>
-            <div className="di-topbar-right" ref={filterDropdownRef} style={{ position: 'relative' }}>
-              <button
-                className={`di-filter-btn ${showFilterDropdown ? 'active' : ''} ${(filterOption !== 'all' || sortOption !== 'default') ? 'applied' : ''}`}
-                onClick={() => setShowFilterDropdown(!showFilterDropdown)}
-              >
-                <i className="fa-solid fa-sliders" />
-                {(filterOption !== 'all' || sortOption !== 'default') && (
-                  <span className="filter-active-dot" />
-                )}
-              </button>
-              <button className="di-new-order-btn" onClick={() => { setCart([]); setSearchQuery(''); setIsCartOpen(false); }} disabled={hasActiveOrder}>
-                <i className="fa-solid fa-plus" />
-                {t('newOrder')}
-              </button>
-
-              {showFilterDropdown && (
-                <div className="filter-dropdown-menu">
-                  <div className="filter-dropdown-section">
-                    <h4>{language === 'Tamil' ? 'வடிகட்டு' : 'Filter'}</h4>
-                    <button className={`filter-opt-btn ${filterOption === 'all' ? 'selected' : ''}`} onClick={() => { setFilterOption('all'); setShowFilterDropdown(false); }}>
-                      {language === 'Tamil' ? 'அனைத்தும்' : 'All Items'}
+                {showFilterDropdown && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: 'calc(100% + 8px)',
+                      left: 0,
+                      background: '#ffffff',
+                      borderRadius: '12px',
+                      padding: '10px',
+                      boxShadow: '0 10px 30px rgba(0,0,0,0.18)',
+                      zIndex: 100,
+                      minWidth: '160px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '6px'
+                    }}
+                  >
+                    <button
+                      style={{
+                        padding: '8px 12px',
+                        border: 'none',
+                        background: filterOption === 'all' ? '#EAA639' : '#f4f4f5',
+                        borderRadius: '8px',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        textAlign: 'left'
+                      }}
+                      onClick={() => { setFilterOption('all'); setShowFilterDropdown(false); }}
+                    >
+                      All Items
                     </button>
-                    <button className={`filter-opt-btn ${filterOption === 'available' ? 'selected' : ''}`} onClick={() => { setFilterOption('available'); setShowFilterDropdown(false); }}>
-                      {language === 'Tamil' ? 'கிடைப்பவை மட்டும்' : 'Available Only'}
+                    <button
+                      style={{
+                        padding: '8px 12px',
+                        border: 'none',
+                        background: filterOption === 'available' ? '#EAA639' : '#f4f4f5',
+                        borderRadius: '8px',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        textAlign: 'left'
+                      }}
+                      onClick={() => { setFilterOption('available'); setShowFilterDropdown(false); }}
+                    >
+                      Available Only
                     </button>
                   </div>
-                  <div className="filter-dropdown-divider" />
-                  <div className="filter-dropdown-section">
-                    <h4>{language === 'Tamil' ? 'விலை வாரியாக' : 'Sort by Price'}</h4>
-                    <button className={`filter-opt-btn ${sortOption === 'default' ? 'selected' : ''}`} onClick={() => { setSortOption('default'); setShowFilterDropdown(false); }}>
-                      {language === 'Tamil' ? 'இயல்புநிலை' : 'Default'}
+                )}
+              </div>
+
+              {/* New Order Button */}
+              <button
+                className="menu-new-order-btn"
+                onClick={() => {
+                  clearCart()
+                  setSearchQuery('')
+                  setActiveCategory('all')
+                }}
+                type="button"
+              >
+                <span>New Order</span>
+                <span style={{ fontSize: '1.2rem', lineHeight: '0.8', marginLeft: '2px' }}>+</span>
+              </button>
+            </div>
+
+            {/* Category Pills Row */}
+            <div className="menu-categories-scroll">
+              {DEFAULT_CATEGORIES.map(cat => {
+                const isActive = activeCategory === cat.id
+                return (
+                  <button
+                    key={cat.id}
+                    className={`menu-category-btn ${isActive ? 'active' : ''}`}
+                    onClick={() => setActiveCategory(cat.id)}
+                    type="button"
+                  >
+                    {cat.iconType === 'pot' ? (
+                      <div className="menu-cat-icon">
+                        <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M5 13h14v5a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-5z" />
+                          <line x1="3.5" y1="13" x2="20.5" y2="13" />
+                          <line x1="5" y1="9.5" x2="19" y2="7.5" />
+                          <path d="M10 8.5a2.2 2.2 0 0 1 3.8-.5" />
+                        </svg>
+                      </div>
+                    ) : (
+                      <img src={cat.image} alt={cat.name} className="menu-cat-thumb" />
+                    )}
+                    <span className="menu-cat-name">{cat.name}</span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Bottom Card: Dishes Grid */}
+          <div className="menu-dishes-card">
+            <div className="menu-dishes-grid">
+              {filteredItems.map(item => {
+                const qty = getItemQty(item.id)
+                return (
+                  <div key={item.id} className="dish-card">
+                    {/* Dish Photo */}
+                    <div className="dish-image-wrap">
+                      <img src={item.image} alt={item.name} className="dish-img" />
+                    </div>
+
+                    {/* Dish Body */}
+                    <div className="dish-card-body">
+                      <div className="dish-header-row">
+                        <h3 className="dish-title">{item.name}</h3>
+                        <span className={`dish-badge ${item.available ? 'available' : 'unavailable'}`}>
+                          {item.available ? 'Available' : 'Not Available'}
+                        </span>
+                      </div>
+
+                      <p className="dish-desc">{item.description}</p>
+
+                      <div className="dish-price">Rs. {item.price}</div>
+                    </div>
+
+                    {/* Dish Footer Controls */}
+                    <div className="dish-footer-row">
+                      <div className="dish-stepper">
+                        <button
+                          className="dish-stepper-btn minus"
+                          onClick={() => handleDecrement(item)}
+                          disabled={qty === 0}
+                          type="button"
+                        >
+                          −
+                        </button>
+                        <span className="dish-stepper-val">{qty}</span>
+                        <button
+                          className="dish-stepper-btn plus"
+                          onClick={() => handleIncrement(item)}
+                          disabled={!item.available}
+                          type="button"
+                        >
+                          +
+                        </button>
+                      </div>
+
+                      <span className={`dish-diet-tag ${item.isVeg ? 'veg' : 'non-veg'}`}>
+                        {item.isVeg ? 'VEG' : 'NON-VEG'}
+                      </span>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* Scroll Indicator Bar at Bottom */}
+            <div className="menu-scroll-indicator">
+              <div className="menu-scroll-thumb" />
+            </div>
+
+            {/* Floating View Cart Pill (Screens 7 & 8) */}
+            {cart.length > 0 && !isSidebarOpen && !manualDrawerOpen && (
+              <button
+                className="floating-view-cart-btn"
+                onClick={() => setManualDrawerOpen(true)}
+                type="button"
+              >
+                <i className="fa-solid fa-cart-shopping" />
+                <span>View Cart</span>
+                <span className="floating-cart-count-badge">
+                  {cart.reduce((s, it) => s + (Number(it.quantity) || 1), 0)}
+                </span>
+              </button>
+            )}
+
+            {/* Screen 8: Slide-in Cart Overlay / Drawer */}
+            {manualDrawerOpen && (
+              <>
+                <div
+                  className="manual-cart-backdrop"
+                  onClick={() => setManualDrawerOpen(false)}
+                  title="Close Cart"
+                />
+                <aside className="manual-cart-drawer">
+                  <div>
+                    <div className="manual-cart-drawer-header">
+                      <span className="manual-cart-drawer-title">Cart</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <span className="manual-cart-drawer-table">Table No : {tableNumber || '06'} ⌄</span>
+                        <button
+                          className="manual-cart-drawer-close"
+                          onClick={() => setManualDrawerOpen(false)}
+                          title="Close Cart"
+                          type="button"
+                          aria-label="Close Cart"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    </div>
+
+                  <div className="manual-cart-order-id-label"># Order ID : 2002</div>
+
+                  {/* Dine In vs Take Away Mode Tabs */}
+                  <div className="manual-cart-type-tabs">
+                    <button className="manual-cart-type-tab active" type="button">
+                      <span>Dine In</span>
+                      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M6 3v5a2 2 0 0 0 2 2h0a2 2 0 0 0 2-2V3" />
+                        <path d="M8 3v5" />
+                        <path d="M8 10v11" />
+                        <path d="M16 3v9a2 2 0 0 1-2-2V3" />
+                        <path d="M16 12v9" />
+                      </svg>
                     </button>
-                    <button className={`filter-opt-btn ${sortOption === 'price-asc' ? 'selected' : ''}`} onClick={() => { setSortOption('price-asc'); setShowFilterDropdown(false); }}>
-                      {language === 'Tamil' ? 'குறைவிலிருந்து அதிகம்' : 'Low to High'}
+                    <button className="manual-cart-type-tab" type="button">
+                      <span>Take Away</span>
+                      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="4" y="6" width="16" height="15" rx="3" />
+                        <path d="M4 8l3-4h10l3 4" />
+                        <path d="M9 11a3 3 0 0 0 6 0" />
+                      </svg>
                     </button>
-                    <button className={`filter-opt-btn ${sortOption === 'price-desc' ? 'selected' : ''}`} onClick={() => { setSortOption('price-desc'); setShowFilterDropdown(false); }}>
-                      {language === 'Tamil' ? 'அதிகத்திலிருந்து குறைவு' : 'High to Low'}
+                  </div>
+
+                  {/* Items List */}
+                  <div className="manual-cart-items-list">
+                    {cart.map(item => {
+                      const itemTotal = (Number(item.price) || 0) * (Number(item.quantity) || 1)
+                      return (
+                        <div key={item.id} className="manual-cart-card">
+                          <div className="manual-cart-card-top">
+                            <img
+                              src={item.image || '/assets/images/dishes/chicken_biryani.png'}
+                              alt={item.name}
+                              className="manual-cart-thumb"
+                            />
+                            <div className="manual-cart-info">
+                              <div className="manual-cart-name">{item.name}</div>
+                              <div className="manual-cart-serves">Serves : {item.serves || '1'}</div>
+                              <div className="manual-cart-unit-price">Rs. {item.price}</div>
+                            </div>
+                            <div className="manual-cart-total-col">
+                              <div className="manual-cart-total-label">Total</div>
+                              <div className="manual-cart-total-val">{itemTotal.toFixed(2)}</div>
+                              <div className="manual-cart-gst-tag">+ GST</div>
+                            </div>
+                          </div>
+
+                          <div className="manual-cart-card-actions">
+                            <button
+                              className="manual-cart-remove-link"
+                              onClick={() => removeCartItem(item.id)}
+                              type="button"
+                            >
+                              Remove item ×
+                            </button>
+                            <div className="dish-stepper">
+                              <button
+                                className="dish-stepper-btn minus"
+                                onClick={() => changeQty(item.id, -1)}
+                                type="button"
+                              >
+                                −
+                              </button>
+                              <span className="dish-stepper-val">{item.quantity}</span>
+                              <button
+                                className="dish-stepper-btn plus"
+                                onClick={() => changeQty(item.id, 1)}
+                                type="button"
+                              >
+                                +
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="manual-cart-note-box">
+                            {item.note || 'Please, Just a little bit spicy only....'}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                <div>
+                  <button
+                    className="manual-cart-place-btn"
+                    onClick={() => navigate('/checkout', { state: { manualFlow: true } })}
+                    type="button"
+                  >
+                    Place Order
+                  </button>
+                </div>
+              </aside>
+            </>
+          )}
+          </div>
+        </section>
+
+        {/* Right Column: Voice Agent Sidebar (Flow 4 & 5) or My Orders Cart */}
+        {isSidebarOpen ? (
+          <aside className={`menu-right-sidebar ${sidebarMode !== 'cart' ? 'voice-panel-mode' : ''}`}>
+            {/* FLOW 4: Voice Agent Prompts */}
+            {sidebarMode === 'voice_prompt' && (
+              <div className="voice-agent-container">
+                <div className="voice-agent-top-pane">
+                  <div className="voice-agent-header-row">
+                    <span className="voice-agent-header-title">Talk to your agent</span>
+                    <button
+                      className="voice-agent-close-btn"
+                      onClick={() => {
+                        setIsSidebarOpen(false)
+                        setFlow(2)
+                      }}
+                      title="Close Voice Assistant"
+                      type="button"
+                      aria-label="Close Voice Assistant"
+                    >
+                      ✕
+                    </button>
+                  </div>
+
+                  {/* 3D Chef Avatar with Waveform Graphic & Audio Badge */}
+                  <div className="voice-agent-visual-center">
+                    <div className="voice-agent-waveform-bars">
+                      {Array.from({ length: 32 }).map((_, i) => (
+                        <div
+                          key={i}
+                          className="voice-wave-bar"
+                          style={{
+                            animationDelay: `${(i % 6) * 0.18}s`,
+                            height: `${10 + (Math.sin(i) + 1) * 14}px`
+                          }}
+                        />
+                      ))}
+                    </div>
+                    <img
+                      src="/assets/images/chef_avatar_bust.png"
+                      alt="AI Voice Agent"
+                      className="voice-agent-chef-img"
+                    />
+                    <div className="voice-agent-mic-badge" onClick={() => setFlow(5)} title="Tap to talk">
+                      <svg viewBox="0 0 24 24" width="18" height="18" fill="none">
+                        <circle cx="9.5" cy="7.5" r="3.5" fill="#ffffff" />
+                        <path d="M3.5 18c0-3 2.7-5 6-5s6 2 6 5" fill="#ffffff" />
+                        <path d="M17.5 9a3.5 3.5 0 0 1 0 5" stroke="#ffffff" strokeWidth="2.2" strokeLinecap="round" />
+                        <path d="M20.5 7a6.5 6.5 0 0 1 0 9" stroke="#ffffff" strokeWidth="2.2" strokeLinecap="round" />
+                      </svg>
+                    </div>
+                  </div>
+
+                  {/* 4 Suggestion Prompt Pills */}
+                  <div className="voice-prompt-list">
+                    {PROMPTS.map((promptText, idx) => (
+                      <button
+                        key={idx}
+                        className="voice-prompt-pill"
+                        onClick={() => handlePromptClick(promptText)}
+                        type="button"
+                      >
+                        <div className="prompt-pill-icon">
+                          <svg viewBox="0 0 24 24" width="18" height="18" fill="none">
+                            <circle cx="9.5" cy="7.5" r="3.5" fill="#EAA639" />
+                            <path d="M3.5 18c0-3 2.7-5 6-5s6 2 6 5" fill="#EAA639" />
+                            <path d="M17.5 9a3.5 3.5 0 0 1 0 5" stroke="#EAA639" strokeWidth="2.2" strokeLinecap="round" />
+                            <path d="M20.5 7a6.5 6.5 0 0 1 0 9" stroke="#EAA639" strokeWidth="2.2" strokeLinecap="round" />
+                          </svg>
+                        </div>
+                        <span className="prompt-pill-text">{promptText}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Bottom Input Pill */}
+                <div className="voice-agent-bottom-pane">
+                  <form className="voice-bottom-input-wrap" onSubmit={handleSendInput}>
+                    <input
+                      type="text"
+                      className="voice-bottom-input"
+                      placeholder="Tap To Speak Or Just Hey...."
+                      value={agentInputText}
+                      onChange={(e) => setAgentInputText(e.target.value)}
+                    />
+                    <button className="voice-mic-submit-btn" type="submit" title="Send or Speak">
+                      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#EAA639" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" />
+                        <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                        <line x1="12" y1="19" x2="12" y2="23" />
+                        <path d="M19 3v2" stroke="#EAA639" strokeWidth="1.8" />
+                        <path d="M18 4h2" stroke="#EAA639" strokeWidth="1.8" />
+                      </svg>
+                    </button>
+                  </form>
+
+                  <div className="sidebar-panel-mode-switch">
+                    <button
+                      className="sidebar-switch-link"
+                      onClick={() => setSidebarMode('cart')}
+                      type="button"
+                    >
+                      View Cart & Place Order ({cart.length}) ➔
                     </button>
                   </div>
                 </div>
-              )}
-            </div>
-          </div>
+              </div>
+            )}
 
-          <div className="di-region-tabs-wrap">
-            <button className={`di-region-tab ${activeRegion === 'all' ? 'active' : ''}`} onClick={() => setActiveRegion('all')}>
-              All Regions
-            </button>
-            <button className={`di-region-tab ${activeRegion === 'south' ? 'active' : ''}`} onClick={() => setActiveRegion('south')}>
-              South Indian
-            </button>
-            <button className={`di-region-tab ${activeRegion === 'north' ? 'active' : ''}`} onClick={() => setActiveRegion('north')}>
-              North Indian
-            </button>
-          </div>
-          <div className="di-tabs-wrap">
-            {menuCategories.filter(cat => activeRegion === 'all' || cat.region === 'all' || cat.region === activeRegion).map(cat => (
-              <button key={cat.id} className={`di-tab ${activeCategory === cat.id ? 'active' : ''}`} onClick={() => setActiveCategory(cat.id)}>
-                {cat.image && <img src={cat.image} alt={t(cat.name)} className="di-tab-img" onError={e => { e.target.onerror = null; e.target.style.display = 'none'; }} />}
-                <span>{language === 'Tamil' && cat.tamilName ? cat.tamilName : t(cat.name)}</span>
-              </button>
-            ))}
-          </div>
-        </div>
+            {/* FLOW 5: Agent Conversation Stream */}
+            {sidebarMode === 'voice_conversation' && (
+              <div className="voice-agent-container">
+                {/* Top Pane: Header and Chef Avatar (Pinned) */}
+                <div className="voice-agent-top-pane">
+                  <div className="voice-agent-header-row">
+                    <span className="voice-agent-header-title">Talk to your Maitre D</span>
+                    <button
+                      className="voice-agent-close-btn"
+                      onClick={() => {
+                        setIsSidebarOpen(false)
+                        setFlow(2)
+                      }}
+                      title="Close Voice Assistant"
+                      type="button"
+                      aria-label="Close Voice Assistant"
+                    >
+                      ✕
+                    </button>
+                  </div>
 
-        <div className="di-seg-bottom">
-          <div className="di-section-header">
-            <h2 className="di-section-title">
-              {t(menuCategories.find(c => c.id === activeCategory)?.name || 'Menu')}
-              <span className="di-section-count">{displayItems.length} {t('items')}</span>
-            </h2>
-          </div>
-          <div className="di-grid di-grid-5" style={{ '--card-scale': cardScale }}>
-            {displayItems.length === 0
-              ? <div className="di-empty">No items found.</div>
-              : displayItems.map(item => (
-                <MenuCard key={item.id} item={item} qty={getQty(item.id)} onAdd={addToCart} onInc={id => changeQty(id, 1)} onDec={id => changeQty(id, -1)} onUpdateQty={updateItemQuantity} hasActiveOrder={hasActiveOrder} />
-              ))
-            }
-          </div>
-          {isMobile && processedItems.length > 6 && (
-            <div className="di-show-more-wrap" style={{ display: 'flex', justifyContent: 'center', marginTop: '15px' }}>
-              <button
-                className="di-show-more-btn"
-                onClick={() => setShowAllItems(!showAllItems)}
-                style={{
-                  background: '#ff3400',
-                  color: 'white',
-                  border: 'none',
-                  padding: '10px 20px',
-                  borderRadius: '30px',
-                  fontWeight: '600',
-                  fontSize: '0.9rem',
-                  cursor: 'pointer',
-                  boxShadow: '0 4px 10px rgba(255, 52, 0, 0.2)'
-                }}
-              >
-                {showAllItems ? (
-                  <>
-                    {language === 'Tamil' ? 'குறைவாகக் காட்டு' : 'Show Less'}{' '}
-                    <i className="fa-solid fa-chevron-up" style={{ marginLeft: '6px' }} />
-                  </>
-                ) : (
-                  <>
-                    {language === 'Tamil' ? 'மேலும் காட்டு' : 'Show More'}{' '}
-                    <i className="fa-solid fa-chevron-down" style={{ marginLeft: '6px' }} />
-                  </>
-                )}
-              </button>
-            </div>
-          )}
-        </div>
-
-        {totalItems > 0 && !isCartOpen && !hasActiveOrder && (
-          <button className="di-view-cart-btn" onClick={() => { setIsCartOpen(true) }}>
-            <i className="fa-solid fa-cart-shopping" />
-            <span>{t('viewCart')}</span>
-            <span className="di-cart-badge">{totalItems}</span>
-          </button>
-        )}
-      </main>
-
-      {/* Cart sidebar (Floating) - Moved outside di-main for z-index layering */}
-      {isCartOpen && (
-        <div className="di-sidebar di-cart-mode active">
-          <div className="di-cart-header">
-            <div className="di-cart-header-left">
-              <span className="di-cart-title">{t('cart') || 'Cart'}</span>
-              <span className="di-cart-table-pill" onClick={() => setShowTableModal(true)} style={{ cursor: 'pointer' }}>{t('tableNo')} {tableNumber} <i className="fa-solid fa-chevron-down" style={{ fontSize: '0.6rem' }} /></span>
-            </div>
-            <button className="di-cart-close" onClick={() => setIsCartOpen(false)}>✕</button>
-          </div>
-          <div className="di-cart-order-id"># New Order</div>
-
-          <div className="di-order-type-tabs">
-            <button className="di-ot-tab active" style={{ width: '100%' }}><i className="fa-solid fa-utensils" /> {t('dineIn')}</button>
-          </div>
-
-          <div className="di-cart-items">
-            {cart.length === 0
-              ? <p className="di-cart-empty">Cart is empty. Add items from the menu.</p>
-              : cart.map(item => (
-                <div key={item.id} className="di-cart-item-container">
-                  <button className="di-cart-remove-circle" onClick={() => setCart(p => p.filter(c => c.id !== item.id))}>✕</button>
-                  <div className="di-cart-item-body">
-                    <div className="di-cart-item-thumb">
-                      {item.image ? <img src={item.image} alt={item.name} /> : <span className="di-cart-thumb-emoji">{item.emoji || '🍽️'}</span>}
-                    </div>
-                    <div className="di-cart-item-details">
-                      <p className="di-cart-item-name">{language === 'Tamil' && item.tamilName ? item.tamilName : item.name}</p>
-                      <p className="di-cart-serves">{t('serves')} : 1</p>
-                      <p className="di-cart-item-price">Rs. {item.price}</p>
-                    </div>
-                    <div className="di-cart-item-right">
-                      <p className="di-cart-total-label">Total</p>
-                      <p className="di-cart-total-amount">{(item.price * item.quantity).toFixed(2)}</p>
-                      <div className="di-cart-stepper">
-                        <button className="di-cart-qty-btn minus" onClick={() => changeQty(item.id, -1)}>−</button>
-                        <input
-                          className="di-cart-qty-num"
-                          type="text"
-                          inputMode="numeric"
-                          value={item.quantity === 0 ? '' : item.quantity}
-                          onChange={(e) => {
-                            let val = e.target.value.replace(/[^0-9]/g, '');
-                            if (val === '') {
-                              updateItemQuantity(item.id, '');
-                              return;
-                            }
-                            const num = parseInt(val, 10);
-                            if (!isNaN(num) && num >= 0) {
-                              updateItemQuantity(item.id, num);
-                            }
-                          }}
-                          onBlur={(e) => {
-                            if (item.quantity === '' || parseInt(item.quantity, 10) === 0) {
-                              updateItemQuantity(item.id, 0);
-                            }
-                          }}
+                  {/* Compact Chef Avatar with Waveform */}
+                  <div className="voice-agent-visual-center compact">
+                    <div className="voice-agent-waveform-bars">
+                      {Array.from({ length: 28 }).map((_, i) => (
+                        <div
+                          key={i}
+                          className="voice-wave-bar"
                           style={{
-                            width: '40px',
-                            border: 'none',
-                            textAlign: 'center',
-                            background: 'transparent',
-                            fontWeight: 'bold',
-                            fontFamily: 'inherit',
-                            fontSize: '1rem',
-                            color: 'inherit',
-                            outline: 'none'
+                            animationDelay: `${(i % 5) * 0.2}s`,
+                            height: `${8 + (Math.sin(i * 1.5) + 1) * 10}px`
                           }}
                         />
-                        <button className="di-cart-qty-btn plus" onClick={() => changeQty(item.id, 1)}>+</button>
+                      ))}
+                    </div>
+                    <img
+                      src="/assets/images/chef_avatar_bust.png"
+                      alt="AI Voice Agent"
+                      className="voice-agent-chef-img"
+                    />
+                    <div className="voice-agent-mic-badge" title="Maitre D Listening">
+                      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" />
+                        <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                        <line x1="12" y1="19" x2="12" y2="23" />
+                      </svg>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Middle Pane: Dynamic Conversation Stream (Auto-scrolls & Fully Visible) */}
+                <div className="voice-chat-stream" ref={chatStreamRef}>
+                  {chatMessages.map((msg) => {
+                    if (msg.sender === 'agent') {
+                      return (
+                        <div key={msg.id} className="chat-row-agent">
+                          <img
+                            src="/assets/images/chef_avatar_head.png"
+                            alt="Chef"
+                            className="chat-avatar-chef"
+                          />
+                          <div className="chat-agent-bubble-wrap">
+                            {msg.text && (
+                              <div className="chat-bubble-agent-text">
+                                {msg.text}
+                              </div>
+                            )}
+                            {msg.richCard && (
+                              <div className="chat-agent-rich-card" style={{ marginTop: msg.text ? '6px' : '0' }}>
+                                <div className="chat-rich-card-title">{msg.richCard.title}</div>
+                                <div className="chat-category-chips-row">
+                                  {(msg.richCard.categories || []).map((cat, ci) => (
+                                    <div key={ci} className="chat-mini-chip-btn" onClick={scrollToLeftMenu}>
+                                      <img src={cat.img} alt={cat.name} className="chat-mini-chip-img" />
+                                      <span className="chat-mini-chip-name">{cat.name}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                                <span className="chat-see-menu-link" onClick={scrollToLeftMenu}>
+                                  ← See menu list in the left column
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    }
+
+                    // User Message
+                    return (
+                      <div key={msg.id} className="chat-row-user">
+                        <div className="chat-bubble-user-text">
+                          {msg.text}
+                        </div>
+                        <div className="chat-avatar-user-badge">
+                          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                            <circle cx="12" cy="7" r="4" />
+                          </svg>
+                        </div>
+                      </div>
+                    )
+                  })}
+
+                  {/* Typing Indicator */}
+                  {isAgentTyping && (
+                    <div className="chat-row-agent">
+                      <img
+                        src="/assets/images/chef_avatar_head.png"
+                        alt="Chef"
+                        className="chat-avatar-chef"
+                      />
+                      <div className="chat-bubble-agent-typing">
+                        <span />
+                        <span />
+                        <span />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Bottom Pane: Input Pill + Order Button (Pinned) */}
+                <div className="voice-agent-bottom-pane">
+                  <form className="voice-bottom-input-wrap" onSubmit={handleSendInput}>
+                    <input
+                      type="text"
+                      className="voice-bottom-input"
+                      placeholder="Tap To Speak Or Just Hey...."
+                      value={agentInputText}
+                      onChange={(e) => {
+                        setAgentInputText(e.target.value)
+                        scrollToChatBottom()
+                      }}
+                      onFocus={scrollToChatBottom}
+                    />
+                    <button className="voice-mic-submit-btn" type="submit" title="Send or Speak">
+                      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#EAA639" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" />
+                        <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                        <line x1="12" y1="19" x2="12" y2="23" />
+                        <path d="M19 3v2" stroke="#EAA639" strokeWidth="1.8" />
+                        <path d="M18 4h2" stroke="#EAA639" strokeWidth="1.8" />
+                      </svg>
+                    </button>
+                  </form>
+
+                  <div className="sidebar-panel-mode-switch">
+                    <button
+                      className="sidebar-switch-link"
+                      onClick={() => setSidebarMode('cart')}
+                      type="button"
+                    >
+                      View Cart & Place Order ({cart.length}) ➔
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* MY ORDERS / CART VIEW (Traditional Order View) */}
+            {sidebarMode === 'cart' && (
+              <div style={{ display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between' }}>
+                <div>
+                  {/* Top Card: Talk to your agent mini banner */}
+                  <div className="sidebar-agent-card">
+                    <div className="sidebar-agent-header">
+                      <span className="sidebar-agent-title">Talk to your agent</span>
+                      <button
+                        className="sidebar-close-btn"
+                        onClick={() => setIsSidebarOpen(false)}
+                        title="Close sidebar"
+                        type="button"
+                      >
+                        ✕
+                      </button>
+                    </div>
+
+                    <div
+                      className="sidebar-agent-visual"
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => setSidebarMode('voice_prompt')}
+                      title="Open full Voice Assistant"
+                    >
+                      <div className="sidebar-waveform-bg">
+                        {Array.from({ length: 28 }).map((_, i) => (
+                          <div
+                            key={i}
+                            className="sidebar-wave-bar"
+                            style={{
+                              animationDelay: `${(i % 5) * 0.2}s`,
+                              height: `${8 + (i % 6) * 5}px`
+                            }}
+                          />
+                        ))}
+                      </div>
+                      <img
+                        src="/assets/images/chef_avatar_bust.png"
+                        alt="AI Voice Agent"
+                        className="sidebar-chef-img"
+                      />
+                      <div className="sidebar-mic-badge">
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" />
+                          <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                          <line x1="12" y1="19" x2="12" y2="23" />
+                        </svg>
                       </div>
                     </div>
                   </div>
-                  <div className="di-cart-note-wrap">
-                    <input className="di-cart-note-input" placeholder="Please, Just a little bit spicy only...." value={item.note || ''} onChange={e => updateNote(item.id, e.target.value)} />
+
+                  {/* My Orders Section */}
+                  <div className="sidebar-orders-section">
+                    <div className="sidebar-orders-header">
+                      <span className="sidebar-orders-title">My Orders</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span
+                          className="sidebar-table-tag"
+                          onClick={() => {
+                            const next = prompt('Change Table Number:', tableNumber || '06')
+                            if (next) setTableNumber(next)
+                          }}
+                          style={{ cursor: 'pointer' }}
+                          title="Click to edit table number"
+                        >
+                          Table No : {tableNumber || '06'} ⌄
+                        </span>
+                        <button
+                          className="sidebar-close-btn"
+                          onClick={() => setIsSidebarOpen(false)}
+                          title="Close sidebar"
+                          type="button"
+                          aria-label="Close sidebar"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Dine In vs Take Away Mode Tabs */}
+                    <div className="sidebar-type-tabs">
+                      <button className="sidebar-type-tab active" type="button">
+                        <span>Dine In</span>
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M6 3v5a2 2 0 0 0 2 2h0a2 2 0 0 0 2-2V3" />
+                          <path d="M8 3v5" />
+                          <path d="M8 10v11" />
+                          <path d="M16 3v9a2 2 0 0 1-2-2V3" />
+                          <path d="M16 12v9" />
+                        </svg>
+                      </button>
+                      <button
+                        className="sidebar-type-tab"
+                        onClick={() => navigate('/take-away')}
+                        type="button"
+                      >
+                        <span>Take Away</span>
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
+                          <rect x="4" y="6" width="16" height="15" rx="3" />
+                          <path d="M4 8l3-4h10l3 4" />
+                          <path d="M9 11a3 3 0 0 0 6 0" />
+                        </svg>
+                      </button>
+                    </div>
+
+                    {/* Cart Items List */}
+                    <div className="sidebar-cart-list">
+                      {cart.length === 0 ? (
+                        <div style={{ textAlign: 'center', padding: '16px', color: '#9ca3af', fontSize: '0.85rem' }}>
+                          Your cart is empty. Add dishes from the menu!
+                        </div>
+                      ) : (
+                        cart.map(item => {
+                          const itemTotal = (Number(item.price) || 0) * (Number(item.quantity) || 0)
+                          return (
+                            <div key={item.id} className="sidebar-cart-item">
+                              <div className="cart-item-top">
+                                <img
+                                  src={item.image || '/assets/images/dishes/chicken_biryani.png'}
+                                  alt={item.name}
+                                  className="cart-item-thumb"
+                                />
+                                <div className="cart-item-info">
+                                  <div className="cart-item-name">{item.name}</div>
+                                  <div className="cart-item-serves">Serves : {item.serves || '1'}</div>
+                                  <div className="cart-item-unit-price">Rs. {item.price}</div>
+                                </div>
+                                <div className="cart-item-total-col">
+                                  <div className="cart-item-total-label">Total</div>
+                                  <div className="cart-item-total-val">{itemTotal.toFixed(2)}</div>
+                                  <div className="cart-item-gst">+ GST</div>
+                                </div>
+                              </div>
+
+                              <div className="cart-item-actions">
+                                <button
+                                  className="cart-item-remove"
+                                  onClick={() => removeCartItem(item.id)}
+                                  type="button"
+                                >
+                                  Remove item ×
+                                </button>
+                                <div className="dish-stepper">
+                                  <button
+                                    className="dish-stepper-btn minus"
+                                    onClick={() => changeQty(item.id, -1)}
+                                    type="button"
+                                  >
+                                    −
+                                  </button>
+                                  <span className="dish-stepper-val">{item.quantity}</span>
+                                  <button
+                                    className="dish-stepper-btn plus"
+                                    onClick={() => changeQty(item.id, 1)}
+                                    type="button"
+                                  >
+                                    +
+                                  </button>
+                                </div>
+                              </div>
+
+                              <input
+                                type="text"
+                                className="cart-item-note-input"
+                                placeholder="Special instructions..."
+                                value={item.note || ''}
+                                onChange={(e) => updateNote(item.id, e.target.value)}
+                              />
+                            </div>
+                          )
+                        })
+                      )}
+                    </div>
                   </div>
                 </div>
-              ))
-            }
-          </div>
 
-          <div className="di-cart-footer">
-            <button className="di-add-more-btn" onClick={() => setIsCartOpen(false)}>
-              <i className="fa-solid fa-plus" /> {t('addMore')}
-            </button>
-            <button className="di-place-order-btn" disabled={cart.length === 0} onClick={() => { setIsCartOpen(false); navigate('/checkout'); }}>
-              {t('confirmOrder')}
-            </button>
-          </div>
-        </div>
-      )}
+                <div>
+                  <button
+                    className="sidebar-place-order-btn"
+                    onClick={() => {
+                      if (cart.length === 0) {
+                        alert('Please add at least one dish to your order.')
+                        return
+                      }
+                      navigate('/checkout')
+                    }}
+                    type="button"
+                  >
+                    <span>Place Order</span>
+                    <span style={{ fontSize: '1.1rem' }}>➔</span>
+                  </button>
 
+                  <div className="sidebar-panel-mode-switch" style={{ marginTop: '8px' }}>
+                    <button
+                      className="sidebar-switch-link"
+                      onClick={() => setSidebarMode('voice_prompt')}
+                      type="button"
+                    >
+                      Back to Voice Agent 💬
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </aside>
+        ) : !manualDrawerOpen ? (
+          <div className="menu-sidebar-toggle-wrap">
+            {/* Flow 3 Speech bubble prompt */}
+            {showGreetingBubble && (
+              <div
+                className="agent-greeting-bubble"
+                onClick={() => setFlow(4)}
+                title="Click to talk to Voice Agent"
+              >
+                <span>Hi! I'm your Voice Agent. How can I help you today?</span>
+              </div>
+            )}
 
-
-      {showTableModal && (
-        <div className="scanner-modal-overlay" style={{ zIndex: 10000 }}>
-          <div className="scanner-modal-content" style={{ maxWidth: '400px', padding: '2rem' }}>
-            <button className="scanner-modal-close" onClick={handleCloseModal}>
-              <i className="fa-solid fa-xmark"></i>
-            </button>
-            <h4 className="scanner-modal-title" style={{ marginBottom: '1rem' }}>Enter Table Number</h4>
-            <p className="scanner-modal-subtitle">Please enter the table number where you wish to be seated.</p>
-
-            <div className="manual-input-group" style={{ marginBottom: '2rem' }}>
-              <input
-                type="text"
-                className="manual-table-input"
-                placeholder="Table No. (e.g. 05)"
-                value={tableInput}
-                onChange={(e) => setTableInput(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleSubmitTable()}
-                style={{ width: '100%', marginBottom: '1rem', padding: '12px', fontSize: '1.2rem', textAlign: 'center', border: '1px solid #ccc', borderRadius: '8px' }}
-              />
-            </div>
-            
-            <button 
-              onClick={handleSubmitTable}
-              style={{
-                width: '100%',
-                background: 'linear-gradient(135deg, #FF6B00 0%, #FF3D00 100%)',
-                color: 'white',
-                border: 'none',
-                padding: '14px 20px',
-                borderRadius: '50px',
-                fontSize: '1rem',
-                fontWeight: 'bold',
-                cursor: 'pointer',
-                boxShadow: '0 4px 15px rgba(255, 107, 0, 0.3)'
-              }}
+            <button
+              className="menu-sidebar-open-pill"
+              onClick={() => setFlow(4)}
+              title="Open Voice Agent"
+              type="button"
             >
-              Confirm Table
+              <span className="open-pill-chevron">«</span>
+              <img src="/assets/images/chef_avatar_head.png" alt="Chef Agent" className="open-pill-avatar" />
             </button>
           </div>
-        </div>
-      )}
+        ) : null}
+      </main>
     </div>
   )
 }

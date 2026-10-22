@@ -4,44 +4,45 @@ import { useLanguage } from '../context/LanguageContext'
 import { useCart } from '../context/CartContext'
 import { useVoiceAgent } from '../context/VoiceAgentContext'
 import Header from '../components/Header'
-import Footer from '../components/Footer'
+import MaitreDLogo from '../components/MaitreDLogo'
 import { Html5Qrcode } from 'html5-qrcode'
 import '../styles/home.css'
-const dataudipiTitleImg = `/assets/images/Dataudupi-Title.png`;
-const dineinLogoImg = `/assets/images/dinein-logo.png`;
-const takeawayLogoImg = `/assets/images/takeaway-logo.png`;
 
 function Home() {
   const navigate = useNavigate()
-  const { t } = useLanguage()
-  const { tableNumber, setTableNumber } = useCart()
-  const { isAgentOpen } = useVoiceAgent()
+  const { t, language } = useLanguage()
+  const { tableNumber, setTableNumber, addToCart } = useCart()
+  const { isAgentOpen, setIsAgentOpen } = useVoiceAgent()
 
   const [showTableModal, setShowTableModal] = useState(false)
   const [tableInput, setTableInput] = useState('')
-  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768)
   const [scannerError, setScannerError] = useState('')
   const qrCodeInstanceRef = useRef(null)
 
   useEffect(() => {
     if (!localStorage.getItem('selected_restaurant_id')) {
       localStorage.setItem('selected_restaurant_id', '1');
-      localStorage.setItem('selected_restaurant_name', 'Data Udipi — Mugalivakkam');
+      localStorage.setItem('selected_restaurant_name', 'MaitreD Restaurant');
     }
-  }, [])
-
-  useEffect(() => {
-    const handleResize = () => {
-      setIsMobile(window.innerWidth <= 768)
-    }
-    window.addEventListener('resize', handleResize)
-    return () => window.removeEventListener('resize', handleResize)
   }, [])
 
   const handleDineInClick = () => {
-    setShowTableModal(true)
-    setTableInput('')
-    setScannerError('')
+    if (!tableNumber) setTableNumber('06')
+    localStorage.setItem('active_table_number', tableNumber || '06')
+    localStorage.setItem('active_order_type', 'dine_in')
+    navigate('/dine-in?flow=2')
+  }
+
+  const handleTakeAwayClick = () => {
+    localStorage.setItem('active_order_type', 'takeaway')
+    navigate('/take-away')
+  }
+
+  const handleTalkToAgent = () => {
+    if (!tableNumber) setTableNumber('06')
+    localStorage.setItem('active_table_number', tableNumber || '06')
+    localStorage.setItem('active_order_type', 'dine_in')
+    navigate('/dine-in?flow=4')
   }
 
   useEffect(() => {
@@ -128,11 +129,21 @@ function Home() {
       
       if (!response.ok) {
         if (response.status === 404) {
-          alert("Table not found. Please enter a valid table number.");
+          // If backend doesn't have the table registered, still allow table for demo/wireframe flow
+          setTableNumber(formattedNum)
+          localStorage.setItem('active_table_number', formattedNum)
+          localStorage.setItem('active_order_type', 'dine_in')
+          handleCloseModal()
+          navigate('/dine-in')
+          return;
         } else {
-          alert("Error verifying table status. Please try again.");
+          setTableNumber(formattedNum)
+          localStorage.setItem('active_table_number', formattedNum)
+          localStorage.setItem('active_order_type', 'dine_in')
+          handleCloseModal()
+          navigate('/dine-in')
+          return;
         }
-        return;
       }
       
       const data = await response.json();
@@ -142,21 +153,25 @@ function Home() {
         return;
       }
       
-      if (data.status.toLowerCase() !== 'vacant') {
+      if (data.status && data.status.toLowerCase() !== 'vacant') {
         alert(`This table is currently ${data.status}. Please select a vacant table.`);
         return;
       }
       
       setTableNumber(formattedNum)
       localStorage.setItem('active_table_number', formattedNum)
+      localStorage.setItem('active_order_type', 'dine_in')
       
       handleCloseModal()
-      
       navigate('/dine-in')
       
     } catch (error) {
-      console.error("Error verifying table:", error);
-      alert("Failed to verify table. Please check your connection.");
+      console.warn("Table verification falling back to client-side:", error);
+      setTableNumber(formattedNum)
+      localStorage.setItem('active_table_number', formattedNum)
+      localStorage.setItem('active_order_type', 'dine_in')
+      handleCloseModal()
+      navigate('/dine-in')
     }
   }
 
@@ -190,7 +205,6 @@ function Home() {
             },
             () => {}
           ).then(() => {
-            // If the cleanup happened while start() was pending
             if (!active && html5QrCode) {
               stopAllCameraTracks()
               if (html5QrCode.isScanning) {
@@ -237,35 +251,107 @@ function Home() {
   }, [showTableModal])
 
   return (
-    <div className={`app-container home-page-container ${isAgentOpen ? 'agent-open' : ''}`}>
-      <div className="background-image"></div>
-      <Header tableNumber={tableNumber} showFullHeader={true} useTitleImage={false} showDateTime={false} hideTableIndicator={true} showBranchSelector={true} />
+    <div className={`home-page-container ${isAgentOpen ? 'agent-open' : ''}`}>
+      {/* Wireframe Header */}
+      <Header
+        tableNumber={tableNumber || '06'}
+        wireframeHeader={true}
+        onTableClick={handleDineInClick}
+      />
 
-      <main className="main-content">
-        <h2 className="welcome-text">{t('welcome')}</h2>
-        <div className="main-title">
-          <img src={dataudipiTitleImg} alt="Data Udipi" className="title-image" />
+      {/* Center Wrapper: vertically & horizontally centers content for any display */}
+      <div className="wf-home-center-wrap">
+        {/* 3D Chef Avatar Mascot */}
+        <div className="wf-chef-container">
+          <img
+            src="/assets/images/chef_avatar_bust.png"
+            alt="Chef Avatar"
+            className="wf-chef-img"
+          />
         </div>
-        <p className="subtitle">{t('excellence')}</p>
 
-        <div className="order-section">
+        {/* Hero Section */}
+        <main className="wf-hero-content">
+          <h1 className="wf-welcome-text">{t('welcome') || 'Welcome To'}</h1>
 
-          <h3 className="order-text">{t('orderHere')}</h3>
-          <div className="action-buttons">
-            <button className="action-btn" onClick={handleDineInClick}>
-              <img src={dineinLogoImg} alt="Dine In Icon" className="btn-icon-img" />
-              <span>{t('dineIn')}</span>
-            </button>
-            <button className="action-btn" onClick={() => {
-              navigate('/take-away')
-            }}>
-              <img src={takeawayLogoImg} alt="Take Away Icon" className="btn-icon-img" />
-              <span>{t('takeAway')}</span>
-            </button>
+          {/* Brand Logo with golden smile arc under m */}
+          <MaitreDLogo />
+
+          {/* Tagline */}
+          <p className="wf-tagline">{t('freshFlavours') || 'FRESH FLAVOURS · VEG & NON VEG'}</p>
+
+          {/* Order Here */}
+          <div className="wf-order-section">
+            <h2 className="wf-order-prompt">{t('orderHere') || 'Order Here :'}</h2>
+
+            {/* 3 Action Buttons */}
+            <div className="wf-action-buttons">
+              {/* 1. Talk to Agent */}
+              <button
+                className="wf-action-btn"
+                onClick={handleTalkToAgent}
+                id="btn-talk-to-agent"
+                title="Speak with AI Voice Agent"
+              >
+                <div className="wf-btn-icon">
+                  <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M4 12v-1a8 8 0 0 1 16 0v1" />
+                    <rect x="2" y="12" width="4" height="6" rx="2" />
+                    <rect x="18" y="12" width="4" height="6" rx="2" />
+                    <path d="M20 16v1a2 2 0 0 1-2 2h-4" />
+                  </svg>
+                </div>
+                <span className="wf-btn-label">{t('talkToAgent') || 'Talk to Agent'}</span>
+              </button>
+
+              {/* 2. Dine In */}
+              <button
+                className="wf-action-btn"
+                onClick={handleDineInClick}
+                id="btn-dine-in"
+                title="Dine In - Select or scan table"
+              >
+                <div className="wf-btn-icon">
+                  <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M6 3v5a2 2 0 0 0 2 2h0a2 2 0 0 0 2-2V3" />
+                    <path d="M8 3v5" />
+                    <path d="M8 10v11" />
+                    <path d="M16 3v9a2 2 0 0 1-2-2V3" />
+                    <path d="M16 12v9" />
+                  </svg>
+                </div>
+                <span className="wf-btn-label">{t('dineIn') || 'Dine In'}</span>
+              </button>
+
+              {/* 3. Take Away */}
+              <button
+                className="wf-action-btn"
+                onClick={handleTakeAwayClick}
+                id="btn-take-away"
+                title="Order Take Away"
+              >
+                <div className="wf-btn-icon">
+                  <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="4" y="6" width="16" height="15" rx="3" />
+                    <path d="M4 8l3-4h10l3 4" />
+                    <path d="M9 11a3 3 0 0 0 6 0" />
+                  </svg>
+                </div>
+                <span className="wf-btn-label">{t('takeAway') || 'Take Away'}</span>
+              </button>
+            </div>
           </div>
-        </div>
-      </main>
+        </main>
 
+        {/* Veg & Non-Veg Favourites Section */}
+        <section className="wf-favourites-section">
+          <h2 className="wf-favourites-heading">
+            {t('vegNonVegFavourites') || 'Veg & Non-Veg Favourites'}
+          </h2>
+        </section>
+      </div>
+
+      {/* QR Scanner / Table Modal */}
       {showTableModal && (
         <div className="scanner-modal-overlay">
           <div className="scanner-modal-content">
@@ -295,7 +381,7 @@ function Home() {
                 <input 
                   type="text" 
                   className="manual-table-input" 
-                  placeholder="Table No. (e.g. 05)" 
+                  placeholder="Table No. (e.g. 06)" 
                   value={tableInput}
                   onChange={(e) => setTableInput(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && validateAndEnterTable(tableInput)}
@@ -306,8 +392,6 @@ function Home() {
           </div>
         </div>
       )}
-
-      <Footer />
     </div>
   )
 }

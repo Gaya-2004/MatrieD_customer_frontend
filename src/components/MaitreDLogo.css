@@ -1,0 +1,61 @@
+.maitred-brand-logo {
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: center;
+  font-family: 'Outfit', sans-serif;
+  font-weight: 800;
+  font-size: 4rem;
+  letter-spacing: -0.5px;
+  line-height: 1;
+  user-select: none;
+  filter: drop-shadow(0 6px 16px rgba(0, 0, 0, 0.5));
+}
+
+.logo-m-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: baseline;
+}
+
+.logo-letter-m {
+  color: #FFFFFF;
+}
+
+.logo-smile-svg {
+  position: absolute;
+  bottom: -6px;
+  left: 1px;
+  width: 96%;
+  height: 18px;
+  pointer-events: none;
+}
+
+.logo-text-body {
+  color: #FFFFFF;
+  margin-left: 1px;
+}
+
+.logo-letter-d {
+  color: #EAA639;
+  margin-left: 2px;
+}
+
+@media (max-width: 768px) {
+  .maitred-brand-logo {
+    font-size: 3rem;
+  }
+  .logo-smile-svg {
+    bottom: -7px;
+    height: 14px;
+  }
+}
+
+@media (max-width: 480px) {
+  .maitred-brand-logo {
+    font-size: 2.4rem;
+  }
+  .logo-smile-svg {
+    bottom: -6px;
+    height: 12px;
+  }
+}

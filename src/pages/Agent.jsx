@@ -7,14 +7,14 @@ import Header from '../components/Header'
 import { fetchCategories, fetchItems, formatMenuData, placeOrder } from '../services/menuService'
 import { sendToCustomerMCP } from '../services/mcpCustomerService'
 import '../styles/pages.css'
-const agentwaiterLogoImg = `/assets/images/agentwaiter_logo.png`;
+const agentwaiterLogoImg = `/assets/images/chef_avatar_head.png`;
 
 function Agent() {
   const navigate = useNavigate()
   const { language, t } = useLanguage()
   const { agentState, setCustomerInfo, setFlowStage } = useVoiceAgent()
   const [messages, setMessages] = useState([
-    { role: 'model', content: language === 'English' ? 'Welcome to Data Udipi! Please tell me your name and mobile number.' : 'டேட்டா உடுப்பிக்கு உங்களை வரவேற்கிறோம்! தயவுசெய்து உங்கள் பெயர் மற்றும் தொலைபேசி எண்ணைக் கூறவும்.' }
+    { role: 'model', content: language === 'English' ? 'Welcome to maitreD! Please tell me your name and mobile number.' : 'மைத்ரேடிக்கு உங்களை வரவேற்கிறோம்! தயவுசெய்து உங்கள் பெயர் மற்றும் தொலைபேசி எண்ணைக் கூறவும்.' }
   ])
   const [inputText, setInputText] = useState('')
   const [isListening, setIsListening] = useState(false)
@@ -295,8 +295,8 @@ function Agent() {
   // Auto-greet on mount
   useEffect(() => {
     const greeting = language === 'English' 
-      ? 'Welcome to Data Udipi! Please tell me your name and mobile number.' 
-      : 'டேட்டா உடுப்பிக்கு உங்களை வரவேற்கிறோம்! தயவுசெய்து உங்கள் பெயர் மற்றும் தொலைபேசி எண்ணைக் கூறவும்.';
+      ? 'Welcome to MaitreD! Please tell me your name and mobile number.' 
+      : 'மேய்டர்-டிக்கு உங்களை வரவேற்கிறோம்! தயவுசெய்து உங்கள் பெயர் மற்றும் தொலைபேசி எண்ணைக் கூறவும்.';
     const timer = setTimeout(() => {
       speakText(greeting);
     }, 1000);
@@ -536,7 +536,7 @@ function Agent() {
           <div className="landing-center-mascot">
             <div className="waveform-bg"></div>
             <div className="mascot-wrapper">
-               <img src="/assets/images/waiter.png" alt="Chef Mascot" className="landing-mascot-img" />
+               <img src="/assets/images/chef_avatar_bust.png" alt="Chef Mascot" className="landing-mascot-img" />
             </div>
           </div>
 
@@ -657,10 +657,10 @@ function Agent() {
                           <div className="corner bl"></div>
                           <div className="corner br"></div>
 
-                          <img src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=upi://pay?pa=dataudipi@upi%26pn=DataUdipi%26am=${msg.finalTotal ? msg.finalTotal.toFixed(2) : '0.00'}%26cu=INR`} alt="Payment QR Code" />
+                          <img src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=upi://pay?pa=maitred@upi%26pn=MaitreD%26am=${msg.finalTotal ? msg.finalTotal.toFixed(2) : '0.00'}%26cu=INR`} alt="Payment QR Code" />
                         </div>
 
-                        <p className="scan-text" style={{ marginTop: '15px', color: '#ff3b00', fontWeight: 600 }}>{t('scanToPay')}</p>
+                        <p className="scan-text" style={{ marginTop: '15px', color: '#EAA639', fontWeight: 600 }}>{t('scanToPay')}</p>
                       </div>
                     ) : (
                       <div className="message-bubble">{msg.content}</div>

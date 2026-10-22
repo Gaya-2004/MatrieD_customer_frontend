@@ -105,20 +105,20 @@
   background: #f5f5f5;
 }
 .payment-method-card.selected {
-  border-color: #ff4500;
-  background: #fff5f2;
-  box-shadow: 0 0 0 1px #ff4500;
+  border-color: #EAA639;
+  background: #fffdf8;
+  box-shadow: 0 0 0 1px #EAA639;
 }
 
 .pm-icon-wrap {
   width: 44px;
   height: 44px;
   border-radius: 12px;
-  background: linear-gradient(135deg, #ff5a00, #ff3b00);
+  background: #EAA639;
   display: grid;
   place-items: center;
   flex-shrink: 0;
-  color: #fff;
+  color: #1e1e1e;
   font-size: 18px;
 }
 
@@ -160,23 +160,23 @@
 /* CTA */
 .payment-confirm-btn {
   width: 100%;
-  padding: 18px;
-  background: #18a832;
-  color: #fff;
-  font-size: 15px;
+  padding: 16px;
+  background: #EAA639;
+  color: #1e1e1e;
+  font-size: 16px;
   font-weight: 700;
   border: none;
   border-radius: 999px;
   cursor: pointer;
   letter-spacing: 0.3px;
   transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
-  box-shadow: 0 6px 24px rgba(24, 168, 50, 0.35);
+  box-shadow: 0 6px 24px rgba(234, 166, 57, 0.4);
   font-family: inherit;
 }
 .payment-confirm-btn:hover {
-  background: #15952d;
+  background: #de982d;
   transform: translateY(-1px);
-  box-shadow: 0 10px 32px rgba(24, 168, 50, 0.45);
+  box-shadow: 0 10px 32px rgba(234, 166, 57, 0.55);
 }
 .payment-confirm-btn:active { transform: translateY(0); }
 
@@ -267,7 +267,7 @@
 .pm-qr-label {
   font-size: 14px;
   font-weight: 700;
-  color: #ff4e00;
+  color: #EAA639;
   letter-spacing: 0.5px;
   margin: 0;
 }
@@ -384,12 +384,13 @@
 .pso-method {
   display: inline-block;
   margin-top: 10px;
-  background: #f0faf2;
-  color: #18a832;
+  background: #fdf5e8;
+  color: #92400e;
   font-weight: 700;
   font-size: 13px;
   padding: 7px 18px;
   border-radius: 999px;
+  border: 1px solid rgba(234, 166, 57, 0.3);
 }
 
 @media (max-width: 600px) {
@@ -417,24 +418,24 @@
   gap: 12px;
   padding: 14px 28px;
   border-radius: 50px;
-  background: linear-gradient(135deg, #049d47 0%, #038a3e 100%);
-  color: #fff;
+  background: #EAA639;
+  color: #1e1e1e;
   border: none;
-  font-size: 1.1rem;
+  font-size: 1.05rem;
   font-weight: 700;
   line-height: 1;
-  box-shadow: 0 10px 40px rgba(4, 157, 71, 0.4);
+  box-shadow: 0 10px 40px rgba(234, 166, 57, 0.4);
   cursor: pointer;
   z-index: 1000;
   transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-  font-family: 'Montserrat', sans-serif;
-  letter-spacing: 0.5px;
+  font-family: 'Outfit', sans-serif;
+  letter-spacing: 0.3px;
 }
 
 .pm-view-cart-btn:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 15px 50px rgba(4, 157, 71, 0.5);
-  background: linear-gradient(135deg, #05ae4f 0%, #049d47 100%);
+  transform: translateY(-3px);
+  box-shadow: 0 15px 50px rgba(234, 166, 57, 0.55);
+  background: #de982d;
 }
 
 .pm-view-cart-btn:active {
@@ -537,9 +538,9 @@
 }
 
 .di-cart-close:hover {
-  background: #ff4e00;
+  background: #EAA639;
   color: #fff;
-  border-color: #ff4e00;
+  border-color: #EAA639;
 }
 
 .di-cart-order-id {
@@ -575,10 +576,10 @@
 }
 
 .di-ot-tab.active {
-  background: #ff4e00;
+  background: #EAA639;
   color: #fff;
-  border-color: #ff4e00;
-  box-shadow: 0 6px 18px rgba(255, 78, 0, 0.25);
+  border-color: #EAA639;
+  box-shadow: 0 6px 18px rgba(234, 166, 57, 0.25);
 }
 
 .di-cart-items {
@@ -659,7 +660,7 @@
 
 .di-cart-item-price {
   font-size: 1rem;
-  color: #ff4e00;
+  color: #92400e;
   font-weight: 800;
   margin: 4px 0 0;
 }
@@ -676,7 +677,7 @@
 
 .di-cart-total-amount {
   font-size: 1.15rem;
-  color: #ff4e00;
+  color: #92400e;
   font-weight: 800;
 }
 
@@ -699,13 +700,13 @@
 
 .di-cart-qty-btn.minus {
   background: #fff;
-  color: #ff4e00;
+  color: #92400e;
   border-radius: 6px;
-  border: 1px solid #ffe0d0;
+  border: 1px solid #fdf5e8;
 }
 
 .di-cart-qty-btn.plus {
-  background: #ff4e00;
+  background: #EAA639;
   color: #fff;
   border-radius: 6px;
 }
@@ -714,7 +715,7 @@
   font-weight: 700;
   width: 28px;
   text-align: center;
-  font-family: 'Times New Roman', Times, serif;
+  font-family: 'Outfit', sans-serif;
 }
 
 .di-cart-note-wrap {
@@ -742,8 +743,8 @@
   width: 100%;
   height: 48px;
   background: #fff;
-  color: #ff4e00;
-  border: 1.5px solid #ff4e00;
+  color: #EAA639;
+  border: 1.5px solid #EAA639;
   border-radius: 16px;
   font-size: 1rem;
   font-weight: 700;

@@ -5,10 +5,6 @@
 node_modules/
 dist/
 .DS_Store
-cloudflared.exe
-
-
-cloudflared.exe
-
-.env
 cloudflared*
+scratch_*
+

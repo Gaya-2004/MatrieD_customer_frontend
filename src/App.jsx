@@ -50,8 +50,9 @@ function App() {
         <CartProvider>
           <ActiveOrderRedirector />
           <Routes>
+            <Route path="/" element={<Home />} />
             <Route path="/home" element={<Home />} />
-            <Route path="/" element={<Agent />} />
+            <Route path="/agent" element={<Agent />} />
             <Route path="/dine-in" element={<DineIn />} />
             <Route path="/take-away" element={<TakeAway />} />
             <Route path="/invoice" element={<Invoice />} />

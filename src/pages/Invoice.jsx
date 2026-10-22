@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import AIAssistantOverlay from '../components/AIAssistantOverlay';
+import MaitreDLogo from '../components/MaitreDLogo';
 import '../styles/invoice.css';
-const restaurantBgImg = `/assets/images/restaurant_bg.png`;
-const udupiBannerImg = `/assets/images/udupi-banner.png`;
+const restaurantBgImg = `/assets/images/maitred_bg.jpg`;
 
 export default function Invoice({ embeddedData }) {
   const location = useLocation();
@@ -44,7 +44,7 @@ export default function Invoice({ embeddedData }) {
       const link = document.createElement('a');
       link.href = imgData;
       const dateStr = `${String(now.getDate()).padStart(2, '0')}-${String(now.getMonth() + 1).padStart(2, '0')}-${now.getFullYear()}`;
-      link.download = `dataudipi bill_${dateStr}.png`;
+      link.download = `maitred_bill_${dateStr}.png`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -87,7 +87,7 @@ export default function Invoice({ embeddedData }) {
   }, [location.state]);
 
   // UPI payment string if method is UPI
-  const upiQrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=upi://pay?pa=dataudipi@upi%26pn=DataUdipi%26am=${finalTotal.toFixed(2)}%26cu=INR`;
+  const upiQrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=upi://pay?pa=maitred@upi%26pn=MaitreD%26am=${finalTotal.toFixed(2)}%26cu=INR`;
 
   const content = (
     <div className="invoice-container" style={isEmbedded ? { margin: '0 auto' } : {}}>
@@ -105,9 +105,11 @@ export default function Invoice({ embeddedData }) {
 
       {/* Header */}
       <div className="invoice-header">
-        <img src={udupiBannerImg} alt="Data Udipi banner" className="invoice-logo" />
+        <div style={{ display: 'flex', justifyContent: 'center', padding: '10px 0' }}>
+          <MaitreDLogo />
+        </div>
         <div className="invoice-address-bar">
-          <span className="bold-text">Data Udipi :</span>
+          <span className="bold-text">maitreD :</span>
           <span className="address-text">MGR Nagar, Nesapakkam, Chennai, Tamil Nadu 600078</span>
           <a href="https://maps.google.com" target="_blank" rel="noopener noreferrer" className="location-link">
             📍 Location
@@ -120,8 +122,8 @@ export default function Invoice({ embeddedData }) {
       <div className="invoice-details">
 
         <div className="company-header">
-          <p className="company-name">Data Udipi Limited</p>
-          <p className="company-info"><span className="bold-text">Place Of Supply :</span> Data Udipi - 51, Anna Main Rd, Ponnambalam Colony, MGR Nagar, Nesapakkam, Chennai, Tamil Nadu 600078.</p>
+          <p className="company-name">maitreD Hospitality Limited</p>
+          <p className="company-info"><span className="bold-text">Place Of Supply :</span> maitreD - 51, Anna Main Rd, Ponnambalam Colony, MGR Nagar, Nesapakkam, Chennai, Tamil Nadu 600078.</p>
           <p className="company-info">Regd. Office: Chennai.</p>
           <p className="company-gst">GSTIN NO: 29AAACT1836J1ZC</p>
         </div>
@@ -202,7 +204,7 @@ export default function Invoice({ embeddedData }) {
           <p>No return / exchange on prepared food items.</p>
           <p>Thank you for dining with us!</p>
           <p>Call to Action: Love what's in? Explore more from Instagram</p>
-          <p>Rewards: DATA UDIPI REWARDS - Scan for loyalty points and offers.</p>
+          <p>Rewards: MAITRED REWARDS - Scan for loyalty points and offers.</p>
           <p>Billing Provider: Digital billing powered by Razorpay</p>
         </div>
       </div>
@@ -211,8 +213,8 @@ export default function Invoice({ embeddedData }) {
       <div className="follow-us">
         <p className="follow-title">Follow Us On</p>
         {/* Replace this src with the colorful Instagram QR code image when you have it exported from Figma */}
-        <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=https://www.instagram.com/data_udipi_restaurant/" alt="Instagram QR" className="social-qr" />
-        <p className="insta-handle">@data_udipi_restaurant</p>
+        <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=https://www.instagram.com/maitred_restaurant/" alt="Instagram QR" className="social-qr" />
+        <p className="insta-handle">@maitred_restaurant</p>
 
         <div className="download-btn-container">
           <button className="download-btn" onClick={handleDownload}>
@@ -221,7 +223,7 @@ export default function Invoice({ embeddedData }) {
         </div>
         <div className="download-btn-container" style={{ marginTop: '10px' }}>
           {!isEmbedded && (
-            <button className="download-btn" style={{ backgroundColor: '#ff4e00' }} onClick={() => {
+            <button className="download-btn" style={{ backgroundColor: '#EAA639', color: '#1e1e1e' }} onClick={() => {
               sessionStorage.removeItem('chatbot_flow_stage');
               sessionStorage.removeItem('last_placed_order_id');
               navigate('/');

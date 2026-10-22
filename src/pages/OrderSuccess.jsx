@@ -6,6 +6,7 @@ import { useCart } from '../context/CartContext';
 import { useLanguage } from '../context/LanguageContext';
 import { useVoiceAgent } from '../context/VoiceAgentContext';
 import '../styles/ordersuccess.css';
+import '../styles/flow_screens.css';
 
 const OrderSuccess = () => {
   const location = useLocation();
@@ -201,213 +202,435 @@ const OrderSuccess = () => {
   const isLoadingOrder = cartData.length === 0 && !fetchedOrder;
   const totalItemsCount = isLoadingOrder ? "..." : displayCartData.reduce((acc, item) => acc + item.quantity, 0);
 
-  const getStatusHeadline = () => {
-    if (dbStatus === 'CANCELLED') return translate('Cancelled', 'இரத்து செய்யப்பட்டது');
-    if (trackStep === 1) return translate('Order Received', 'ஆர்டர் பெறப்பட்டது');
-    if (trackStep === 2) return translate('Preparing', 'தயாரிக்கப்படுகிறது');
-    if (trackStep === 3) return translate('Ready to Serve', 'பரிமாற தயார்');
-    return translate('Served at Table', 'மேஜையில் பரிமாறப்பட்டது');
-  };
+  const rawNum = orderId ? String(orderId).replace('ORD-', '').replace(/^0+/, '') : '';
+  const displayOrderNum = rawNum && rawNum.length <= 4 ? rawNum : '1042';
 
-  const getStatusSubline = () => {
-    if (dbStatus === 'CANCELLED') return translate('This order has been cancelled.', 'இந்த ஆர்டர் இரத்து செய்யப்பட்டது.');
-    if (trackStep === 1) return translate("We've received your order.", 'உங்கள் ஆர்டர் பெறப்பட்டது.');
-    if (trackStep === 2) return translate('Chef is cooking your meal', 'செஃப் உணவைத் தயாரிக்கிறார்');
-    if (trackStep === 3) return translate('Plating up now', 'இப்போது தட்டுகளில் வைக்கப்படுகிறது');
-    return translate('Enjoy your meal!', 'உங்கள் உணவை சுவையுங்கள்!');
-  };
+  const itemsToDisplay = displayCartData.length > 0
+    ? displayCartData
+    : [
+        { name: 'Onion Rava Dosa', quantity: 2, price: 100 },
+        { name: 'Chicken Biryani', quantity: 1, price: 210 },
+        { name: 'Special Filter Coffee', quantity: 2, price: 45 }
+      ];
 
-  const getProgressBarWidth = () => {
-    if (dbStatus === 'CANCELLED') return '0%';
-    if (trackStep === 1) return '15%';
-    if (trackStep === 2) return '45%';
-    if (trackStep === 3) return '75%';
-    return '100%';
-  };
+  const isManualFlow = location.state?.manualFlow || false;
+  // Manual Flow Steps: 1 = Confirmed (Screen 12), 2 = Live Tracking (Screen 13), 3 = Ready for Pickup (Screen 14)
+  const [manualStep, setManualStep] = useState(
+    location.state?.manualStep || (location.state?.isManualOrderConfirmed ? 1 : 1)
+  );
 
-  const getConnectorHeight = () => {
-    if (trackStep <= 1) return '0px';
-    if (trackStep === 2) return '42px';
-    if (trackStep === 3) return '94px';
-    return '146px';
-  };
+  useEffect(() => {
+    if (location.state?.manualStep) {
+      setManualStep(location.state.manualStep);
+    }
+  }, [location.state?.manualStep]);
+
+  // Render Manual Flow (Screens 12, 13, 14)
+  if (isManualFlow) {
+    const orderNumberStr = location.state?.orderId || '1042';
+
+    return (
+      <div className="flow-page-bg">
+        <div className="flow-top-breadcrumbs">
+          {manualStep === 1 && 'Maitre D · Manual order confirmed'}
+          {manualStep === 2 && 'Maitre D · Manual live tracking'}
+          {manualStep === 3 && 'Maitre D · Manual ready for pickup'}
+        </div>
+
+        <Header
+          tableNumber={tableNumber || '06'}
+          menuWireframeHeader={true}
+          showDateTime={true}
+          showServiceBell={true}
+          onTableClick={() => {
+            const next = prompt('Enter Table Number:', tableNumber || '06');
+            if (next) setTableNumber(next);
+          }}
+        />
+
+        <main className="manual-flow-center-wrap">
+          {/* ================================================================
+              SCREEN 12: ORDER PLACED SUCCESSFULLY
+              ================================================================ */}
+          {manualStep === 1 && (
+            <div className="manual-success-card">
+              <button
+                className="manual-back-to-menu-btn"
+                onClick={() => navigate('/dine-in')}
+                type="button"
+              >
+                <i className="fa-solid fa-arrow-left" />
+                <span>Back to Menu</span>
+              </button>
+
+              <h1 className="manual-success-title">Order Placed Successfully!</h1>
+
+              <div className="manual-success-body-grid">
+                {/* Left Ticket Box */}
+                <div className="manual-ticket-box">
+                  <div className="manual-check-circle-large">
+                    <i className="fa-solid fa-check" />
+                  </div>
+                  <div className="manual-ticket-order-id">Order #{orderNumberStr}</div>
+                  <div className="manual-ticket-caption">Kitchen has received your ticket</div>
+                </div>
+
+                {/* Right Prep & Summary Box */}
+                <div className="manual-prep-summary-box">
+                  <div className="manual-prep-label">ESTIMATED PREP TIME</div>
+                  <div className="manual-prep-time">15 – 20 Mins</div>
+
+                  <div className="manual-confirmed-summary-box">
+                    <div className="manual-confirmed-summary-title">Order Summary</div>
+                    <div className="manual-confirmed-summary-rows">
+                      <div className="manual-confirmed-row">
+                        <span>1 × Onion Rava Dosa</span>
+                        <span>Rs. 100</span>
+                      </div>
+                      <div className="manual-confirmed-row">
+                        <span>1 × Butter Chicken</span>
+                        <span>Rs. 240</span>
+                      </div>
+                      <div className="manual-confirmed-row">
+                        <span>Tax & service charges</span>
+                        <span>Rs. 78.20</span>
+                      </div>
+                      <div className="manual-confirmed-row total">
+                        <span>Total Amount (Paid)</span>
+                        <span>Rs. 418.20</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                className="manual-action-btn"
+                onClick={() => setManualStep(2)}
+                type="button"
+              >
+                <span>Track Order Status</span>
+                <span style={{ fontSize: '1.2rem' }}>➔</span>
+              </button>
+            </div>
+          )}
+
+          {/* ================================================================
+              SCREEN 13: LIVE PREPARATION STATUS
+              ================================================================ */}
+          {manualStep === 2 && (
+            <div className="manual-tracking-card">
+              <button
+                className="manual-back-to-menu-btn"
+                onClick={() => navigate('/dine-in')}
+                type="button"
+              >
+                <i className="fa-solid fa-arrow-left" />
+                <span>Back to Menu</span>
+              </button>
+
+              <div className="manual-tracking-header-row">
+                <h1 className="manual-tracking-title">Live Preparation Status</h1>
+                <div className="manual-tracking-order-badge">Order #{orderNumberStr}</div>
+              </div>
+
+              <div className="manual-tracking-body-grid">
+                {/* Left Stepper */}
+                <div className="manual-stepper-container">
+                  {/* Step 1: Done */}
+                  <div className="manual-step-item done">
+                    <div className="manual-step-indicator">
+                      <div className="manual-step-dot done">
+                        <i className="fa-solid fa-check" />
+                      </div>
+                      <div className="manual-step-line done" />
+                    </div>
+                    <div className="manual-step-content">
+                      <div className="manual-step-title">Order Received</div>
+                      <div className="manual-step-desc">Confirmed by the desk at 16:54 PM</div>
+                    </div>
+                  </div>
+
+                  {/* Step 2: In-Progress */}
+                  <div className="manual-step-item active">
+                    <div className="manual-step-indicator">
+                      <div className="manual-step-dot active">
+                        <div className="manual-step-dot-inner" />
+                      </div>
+                      <div className="manual-step-line" />
+                    </div>
+                    <div className="manual-step-content">
+                      <div className="manual-step-title-row">
+                        <span className="manual-step-title">Preparing Your Food</span>
+                        <span className="manual-step-badge">COOKING</span>
+                      </div>
+                      <div className="manual-step-desc">Chef is preparing your dosa and Butter Chicken</div>
+                    </div>
+                  </div>
+
+                  {/* Step 3: Pending / Clickable to advance */}
+                  <div
+                    className="manual-step-item pending"
+                    onClick={() => setManualStep(3)}
+                    title="Click to view Ready for Pickup screen"
+                    style={{ cursor: 'pointer' }}
+                  >
+                    <div className="manual-step-indicator">
+                      <div className="manual-step-dot" />
+                    </div>
+                    <div className="manual-step-content">
+                      <div className="manual-step-title">Ready for Pickup</div>
+                      <div className="manual-step-desc">Counter 3 ticket calling</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Right Timer Box */}
+                <div className="manual-timer-panel">
+                  <div className="manual-circle-progress" onClick={() => setManualStep(3)} title="Click to view Ready for Pickup" style={{ cursor: 'pointer' }}>
+                    <div className="manual-circle-number">12</div>
+                    <div className="manual-circle-sub">MINS LEFT</div>
+                  </div>
+                  <div className="manual-timer-caption">Almost there!</div>
+                  <div className="manual-timer-sub">Prep is running on schedule</div>
+                </div>
+              </div>
+
+              {/* Bottom Help and Info */}
+              <div className="manual-tracking-footer-row">
+                <div className="manual-tracking-note">
+                  Please stay near your table. We will notify you when it's ready.
+                </div>
+                <button
+                  className="manual-need-help-btn"
+                  onClick={handleCallStaff}
+                  type="button"
+                >
+                  <i className="fa-regular fa-comment-dots" />
+                  <span>Need Help?</span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ================================================================
+              SCREEN 14: READY FOR PICKUP
+              ================================================================ */}
+          {manualStep === 3 && (
+            <div className="manual-pickup-card">
+              <button
+                className="manual-back-to-menu-btn"
+                onClick={() => navigate('/dine-in')}
+                type="button"
+              >
+                <i className="fa-solid fa-arrow-left" />
+                <span>Back to Menu</span>
+              </button>
+
+              <h1 className="manual-pickup-title">Your Order is Ready!</h1>
+
+              <div className="manual-pickup-body-grid">
+                {/* Left Counter Box */}
+                <div className="manual-counter-box">
+                  <div className="manual-counter-label">PROCEED TO COUNTER</div>
+                  <div className="manual-counter-pill">Counter 3</div>
+                  <div className="manual-counter-note">Show your screen token to the server</div>
+                </div>
+
+                {/* Right Checklist Box */}
+                <div className="manual-token-info-col">
+                  <div className="manual-token-id-label">Token ID</div>
+                  <div className="manual-token-id-num">#MD-{orderNumberStr}</div>
+
+                  <div className="manual-items-collect-box">
+                    <div className="manual-items-collect-heading">Please collect the following items:</div>
+                    <div className="manual-items-checklist">
+                      <div className="manual-check-item">
+                        <i className="fa-solid fa-check" />
+                        <span>1 × Onion Rava Dosa</span>
+                      </div>
+                      <div className="manual-check-item">
+                        <i className="fa-solid fa-check" />
+                        <span>1 × Butter Chicken</span>
+                      </div>
+                      <div className="manual-check-item">
+                        <i className="fa-solid fa-check" />
+                        <span>Served with basmati rice</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                className="manual-action-btn"
+                onClick={() => {
+                  resetJourney();
+                  navigate('/dine-in');
+                }}
+                type="button"
+              >
+                <span>Place New Order</span>
+                <span style={{ fontSize: '1.2rem', marginLeft: '4px' }}>+</span>
+              </button>
+            </div>
+          )}
+        </main>
+
+        <div className={`os-toast-notif ${showToast ? 'show' : ''}`}>
+          {toastMessage}
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="os-page">
-      <div className="os-bg" />
-      <Header 
-        tableNumber={tableNumber} 
-        showFullHeader={true} 
-        useTitleImage={true} 
-        showDateTime={true} 
-        disableNavigation={!isFinalScreen} 
+    <div className="flow-page-bg">
+      <div className="flow-top-breadcrumbs">
+        {isTrackMode ? 'Maitre D · Live order tracking' : 'Maitre D · Order confirmation'}
+      </div>
+
+      <Header
+        tableNumber={tableNumber || '06'}
+        menuWireframeHeader={true}
+        showDateTime={true}
+        showServiceBell={true}
+        onTableClick={() => {
+          const next = prompt('Enter Table Number:', tableNumber || '06');
+          if (next) setTableNumber(next);
+        }}
       />
 
-      <main className="os-main">
-        {isFinalScreen ? (
-          /* FINAL SCREEN: THANK YOU */
-          <div className="os-card" style={{ textAlign: 'center', padding: '40px 30px' }}>
-            <div className="os-tick-wrap" style={{ width: '120px', height: '120px', margin: '0 auto 20px' }}>
-              <svg className="os-checkmark" viewBox="0 0 52 52" style={{ width: '120px', height: '120px' }}>
-                <circle className="os-check-circle" cx="26" cy="26" r="25" fill="none" />
-                <path className="os-check-path" fill="none" d="M14 27 l7 7 l17-17" />
-              </svg>
+      <main className="flow-modal-center-wrap">
+        {!isTrackMode ? (
+          /* ================================================================
+             SCREEN 4: ORDER CONFIRMED MODAL
+             ================================================================ */
+          <div className="flow-confirmed-card">
+            <div className="flow-confirm-check-badge">
+              <i className="fa-solid fa-check" />
             </div>
-            <h1 className="os-title" style={{ fontSize: '36px', marginBottom: '12px' }}>
-              {translate('Thank You!', 'நன்றி!')}
-            </h1>
-            <p className="os-subtitle" style={{ fontSize: '18px', color: '#555', marginBottom: '12px' }}>
-              {translate('Visit again!', 'மீண்டும் வருக!')}
-            </p>
-            <p className="os-redirect-notice" style={{ fontSize: '15px', color: '#1a7a3b', marginBottom: '32px', fontWeight: '600' }}>
-              <i className="fa-solid fa-check" style={{ marginRight: '8px' }}></i>
-              {translate(`Order Completed!`, `ஆர்டர் முடிந்தது!`)}
-            </p>
 
-            <div className="os-actions" style={{ maxWidth: '400px', margin: '0 auto' }}>
-              <button className="os-home-btn" onClick={() => {
-                sessionStorage.removeItem('chatbot_flow_stage');
-                sessionStorage.removeItem('last_placed_order_id');
-                resetJourney();
-                navigate('/');
-              }}>
-                <i className="fa-solid fa-house" /> {translate('Back to Home', 'முகப்பு')}
-              </button>
-              <button className="os-download-btn" onClick={() => {
-                navigate('/invoice', {
-                  state: {
-                    orderId,
-                    cartData: displayCartData,
-                    subtotal,
-                    gst,
-                    finalTotal: displayTotal,
-                    mobileNumber: formData.phone || 'WALK-IN',
-                    paymentMethod
-                  }
-                });
-              }}>
-                <i className="fa-solid fa-download" /> {translate('Download Bill', 'ரசீது')}
-              </button>
-            </div>
-          </div>
-        ) : !isTrackMode ? (
-          /* SCREEN 1: ORDER SUCCESS CONFIRMATION */
-          <div className="os-card new-os-card">
-            <button className="new-os-back" onClick={() => {
-              resetJourney();
-              navigate('/');
-            }}>
-              <i className="fa-solid fa-arrow-left"></i> {translate('Back to Menu', 'மெனுவுக்கு திரும்பு')}
-            </button>
-            <h1 className="new-os-title">{translate('Order Placed Successfully!', 'ஆர்டர் வெற்றிகரமாக செய்யப்பட்டது!')}</h1>
-            
-            <div className="new-os-grid">
-              <div className="new-os-left">
-                <div className="new-os-check-circle">
-                  <i className="fa-solid fa-check"></i>
-                </div>
-                <h2>{translate('Order', 'ஆர்டர்')} #{orderId.replace('ORD-', '').replace(/^0+/, '')}</h2>
-                <p>{translate('Kitchen has received your ticket', 'சமையலறை உங்கள் டிக்கெட்டைப் பெற்றுள்ளது')}</p>
+            <h1 className="flow-confirmed-title">Order Confirmed!</h1>
+            <div className="flow-confirmed-sub">Your Maitre D dining experience has begun.</div>
+
+            <div className="flow-order-meta-pill-box">
+              <div className="flow-order-meta-col">
+                <span className="flow-order-meta-label">Order Number</span>
+                <span className="flow-order-meta-val">#{displayOrderNum}</span>
               </div>
-              
-              <div className="new-os-right">
-                <div className="new-os-prep-time">
-                  <span className="label">{translate('ESTIMATED PREP TIME', 'மதிப்பிடப்பட்ட தயாரிப்பு நேரம்')}</span>
-                  <span className="time">15 - 20 Mins</span>
-                </div>
-                
-                <div className="new-os-summary">
-                  <h3>{translate('Order Summary', 'ஆர்டர் சுருக்கம்')}</h3>
-                  <div className="new-os-summary-items">
-                    {displayCartData.map(item => (
-                      <div key={item.id} className="new-os-summary-row">
-                        <span>{item.quantity} × {item.name}</span>
-                        <span>Rs. {item.price * item.quantity}</span>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="new-os-summary-total">
-                    <span>{translate('Total Amount (Paid)', 'மொத்த தொகை (செலுத்தப்பட்டது)')}</span>
-                    <span>Rs. {Number(displayTotal).toFixed(0)}</span>
-                  </div>
-                </div>
+              <div className="flow-order-meta-col">
+                <span className="flow-order-meta-label">Est. Wait Time</span>
+                <span className="flow-order-meta-val">15–20 Mins</span>
               </div>
             </div>
-            
-            <button className="new-os-track-btn" onClick={() => setIsTrackMode(true)}>
-              {translate('Track Order Status', 'ஆர்டர் நிலையை கண்காணிக்கவும்')} <i className="fa-solid fa-arrow-right"></i>
-            </button>
+
+            <div className="flow-confirmed-items-section">
+              <div className="flow-confirmed-items-header">Items Ordered</div>
+              <div className="flow-confirmed-items-list">
+                {itemsToDisplay.map((item, idx) => (
+                  <div key={idx} className="flow-confirmed-item-row">
+                    <span>{item.name} ×{item.quantity}</span>
+                    <span>Rs. {(Number(item.price) * Number(item.quantity)).toFixed(2)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="flow-confirmed-actions">
+              <button
+                className="flow-btn-outline"
+                onClick={() => setIsTrackMode(true)}
+                type="button"
+              >
+                Track Real-Time Status
+              </button>
+              <button
+                className="flow-btn-filled"
+                onClick={() => {
+                  resetJourney();
+                  navigate('/dine-in');
+                }}
+                type="button"
+              >
+                Back to Menu
+              </button>
+            </div>
           </div>
         ) : (
-          /* SCREENS 2, 3, 4: LIVE TRACKING */
-          <div className="os-card live-track-card">
-            <div className="live-track-header">
-              <button className="new-os-back" onClick={() => setIsTrackMode(false)} style={{ marginBottom: 0 }}>
-                <i className="fa-solid fa-arrow-left"></i> {translate('Back', 'பின்னே')}
-              </button>
-              <span className="live-track-order-id">{translate('Order', 'ஆர்டர்')} #{orderId.replace('ORD-', '').replace(/^0+/, '')}</span>
-            </div>
-            
-            <h1 className="live-track-title">{translate('Live Preparation Status', 'நேரடி தயாரிப்பு நிலை')}</h1>
-
-            <div className="live-track-grid">
-              {/* Left Column - Stepper */}
-              <div className="live-track-stepper">
-                {/* Step 1: Order Received */}
-                <div className={`lt-step ${trackStep >= 1 ? 'completed' : 'active'}`}>
-                  <div className="lt-icon"><i className="fa-solid fa-check"></i></div>
-                  <div className="lt-content">
-                    <h4>{translate('Order Received', 'ஆர்டர் பெறப்பட்டது')}</h4>
-                    <p>{translate('Confirmed by the desk', 'உறுதி செய்யப்பட்டது')}</p>
-                  </div>
-                </div>
-
-                {/* Step 2: Preparing */}
-                <div className={`lt-step ${trackStep > 2 ? 'completed' : trackStep === 2 ? 'active' : ''}`}>
-                  <div className="lt-icon">{trackStep > 2 ? <i className="fa-solid fa-check"></i> : trackStep === 2 ? <div className="lt-dot"></div> : null}</div>
-                  <div className="lt-content">
-                    <h4>
-                      {translate('Preparing Your Food', 'உணவு தயாராகிறது')} 
-                      {trackStep === 2 && <span className="lt-badge">COOKING</span>}
-                    </h4>
-                    <p>{translate('Chef is crafting your fresh South Indian dishes', 'செஃப் உணவை தயார் செய்கிறார்')}</p>
-                  </div>
-                </div>
-
-                {/* Step 3: Ready to Serve */}
-                <div className={`lt-step ${trackStep > 3 ? 'completed' : trackStep === 3 ? 'active' : ''}`}>
-                  <div className="lt-icon">{trackStep > 3 ? <i className="fa-solid fa-check"></i> : trackStep === 3 ? <div className="lt-dot"></div> : null}</div>
-                  <div className="lt-content">
-                    <h4>{translate('Ready to Serve', 'பரிமாற தயார்')}</h4>
-                    <p>{translate('Your food is plated and ready', 'உங்கள் உணவு தயாராக உள்ளது')}</p>
-                  </div>
-                </div>
-
-                {/* Step 4: Served at Table */}
-                <div className={`lt-step ${trackStep === 4 ? 'active' : ''}`}>
-                  <div className="lt-icon">{trackStep === 4 ? <div className="lt-dot"></div> : null}</div>
-                  <div className="lt-content">
-                    <h4>{translate('Served at Table', 'பரிமாறப்பட்டது')}</h4>
-                    <p>{translate('Enjoy your meal!', 'உங்கள் உணவை சுவையுங்கள்!')}</p>
-                  </div>
-                </div>
+          /* ================================================================
+             SCREEN 5: LIVE ORDER TRACKING
+             ================================================================ */
+          <div className="flow-tracking-card">
+            <div className="flow-tracking-header">
+              <div>
+                <div className="flow-tracking-sublabel">Current Status</div>
+                <h1 className="flow-tracking-title">Tracking Order #{displayOrderNum}</h1>
               </div>
+              <div className="flow-eta-badge">ETA: 12 Mins</div>
+            </div>
 
-              {/* Right Column - Timer */}
-              <div className="live-track-timer-box">
-                <div className="lt-timer-circle">
-                   <span className="lt-time">{trackStep === 4 ? '0' : trackStep === 3 ? '1' : trackStep === 2 ? '12' : '15'}</span>
-                   <span className="lt-unit">MINS LEFT</span>
+            {/* Stepper Progress Bar */}
+            <div className="flow-tracking-stepper-wrap">
+              <div className="flow-stepper-bar-bg" />
+              <div
+                className="flow-stepper-bar-fill"
+                style={{ width: trackStep === 1 ? '0%' : trackStep === 2 ? '50%' : '100%' }}
+              />
+
+              <div className="flow-stepper-nodes">
+                {/* Step 1 */}
+                <div className="flow-stepper-node done">
+                  <div className="flow-stepper-circle" />
+                  <div className="flow-stepper-node-title">Order Received</div>
+                  <div className="flow-stepper-node-sub">16:55 PM</div>
                 </div>
-                <h4>{trackStep >= 3 ? translate('Almost there!', 'கிட்டத்தட்ட தயார்!') : translate('Cooking in progress', 'சமையல் நடக்கிறது')}</h4>
-                <p>{translate('Prep is running on schedule', 'தயாரிப்பு அட்டவணைப்படி நடக்கிறது')}</p>
+
+                {/* Step 2 */}
+                <div className="flow-stepper-node active">
+                  <div className="flow-stepper-circle" />
+                  <div className="flow-stepper-node-title">Preparing</div>
+                  <div className="flow-stepper-node-sub">In Progress</div>
+                </div>
+
+                {/* Step 3 */}
+                <div className="flow-stepper-node">
+                  <div className="flow-stepper-circle" />
+                  <div className="flow-stepper-node-title">Ready for Pickup</div>
+                  <div className="flow-stepper-node-sub">Pending</div>
+                </div>
               </div>
             </div>
 
-            <div className="live-track-footer">
-              <p>{translate('Please stay near your table. We will notify you when it\'s ready.', 'தயவுசெய்து உங்கள் மேஜைக்கு அருகில் இருக்கவும்.')}</p>
-              <button className="new-os-back" onClick={handleCallStaff} style={{ color: '#ff4e00', marginBottom: 0, fontWeight: 700 }}>
-                <i className="fa-regular fa-comment"></i> {translate('Need Help?', 'உதவி தேவையா?')}
+            {/* Chef Cooking In-Progress Box */}
+            <div className="flow-chef-cooking-box">
+              <img
+                src="/assets/images/chef_cooking.png"
+                alt="Chef preparing meal"
+                className="flow-chef-illustration"
+              />
+              <div className="flow-chef-cooking-info">
+                <div className="flow-chef-cooking-title">Chef is preparing your meal!</div>
+                <div className="flow-chef-cooking-desc">
+                  Your Chicken Biryani is cooking with aromatic basmati rice, marinated chicken and freshly ground spices.
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="flow-tracking-footer">
+              <div className="flow-tracking-mic-hint">
+                Need something else? Tap the microphone button or talk to your agent.
+              </div>
+              <button
+                className="flow-tracking-back-btn"
+                onClick={() => {
+                  resetJourney();
+                  navigate('/dine-in');
+                }}
+                type="button"
+              >
+                Back to Menu
               </button>
             </div>
           </div>

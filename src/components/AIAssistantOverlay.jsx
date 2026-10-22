@@ -9,7 +9,7 @@ import { sendToCustomerMCP } from '../services/mcpCustomerService';
 import { derivePageContext, getInitialGreetingForPage } from '../utils/voiceAgentUtils';
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
-const agentwaiterLogoImg = `/assets/images/agentwaiter_logo.png`;
+const agentwaiterLogoImg = `/assets/images/chef_avatar_head.png`;
 
 const SILENCE_TIMEOUT = 3000; // Configurable silence threshold (increased to 3.0s to allow users to speak long sentences without being cut off)
 const RMS_THRESHOLD = 2.0;    // Configurable voice detection threshold
@@ -21,7 +21,7 @@ const WaveSymbol = ({ active }) => (
       <div key={i} style={{
         width: '3px',
         height: active ? '100%' : '4px',
-        background: '#ff4e00',
+        background: '#EAA639',
         borderRadius: '3px',
         animation: active ? `waveBarBounce 0.5s infinite alternate ease-in-out ${i*0.1}s` : 'none',
         transition: 'height 0.2s'
@@ -136,7 +136,14 @@ const AIAssistantOverlay = () => {
 
   // ── Auto-open and greet ────────────────────────────────────────────────────
   useEffect(() => {
-    if (location.pathname === '/') return;
+    if (
+      location.pathname === '/' ||
+      location.pathname === '/home' ||
+      location.pathname === '/dine-in' ||
+      location.pathname === '/take-away' ||
+      location.pathname.includes('checkout') ||
+      location.pathname.includes('payment')
+    ) return;
     const isSuccessPage = location.pathname.includes('order-success');
     if (!agentState.isGreeted && !isSuccessPage) {
       setIsGreeted(true);
@@ -144,7 +151,7 @@ const AIAssistantOverlay = () => {
       setIsVoiceMode(true);
       const pageCtx = derivePageContext(location.pathname);
       const initialGreeting = getInitialGreetingForPage(pageCtx, agentState) ||
-        '[SYSTEM: Start the ordering journey. Greet the customer warmly, welcome them to Data Udipi, and ask for their name. flow_stage=GREETING]';
+        '[SYSTEM: Start the ordering journey. Greet the customer warmly, welcome them to MaitreD, and ask for their name. flow_stage=GREETING]';
       
       // Do not clear this timeout on cleanup, otherwise the re-render from setIsGreeted will cancel it.
       setTimeout(() => {
@@ -719,13 +726,21 @@ const AIAssistantOverlay = () => {
     }
   };
 
-  // ── Don't render on the landing page ──────────────────────────────────
-  if (location.pathname === '/') return null;
+  // ── Don't render on landing, menu, checkout or payment pages ──
+  const isExcludedPage =
+    location.pathname === '/' ||
+    location.pathname === '/home' ||
+    location.pathname === '/dine-in' ||
+    location.pathname === '/take-away' ||
+    location.pathname.includes('checkout') ||
+    location.pathname.includes('payment');
+
+  if (isExcludedPage) return null;
 
   return (
     <>
       {/* Floating trigger button */}
-      {!isOpen && (
+      {!isOpen && !isExcludedPage && (
         <div
           className={`ai-trigger-btn ${(micState === 'LISTENING' || micState === 'RECORDING') ? 'is-listening' : ''}`}
           onClick={toggleSidebar}
@@ -753,7 +768,15 @@ const AIAssistantOverlay = () => {
           <div className="ai-hero-frosted-original" style={{ height: isVoiceMode ? '270px' : '110px', transition: 'height 0.3s ease' }}>
             <header className="ai-unified-header">
               <span>Talk To Your Agent</span>
-              {/* Close button removed to keep agent open permanently */}
+              <button
+                className="ai-close-x"
+                onClick={() => setIsOpen(false)}
+                title="Close Assistant"
+                type="button"
+                aria-label="Close Assistant"
+              >
+                ✕
+              </button>
             </header>
 
             {/* Mascot */}
@@ -853,8 +876,8 @@ const AIAssistantOverlay = () => {
                   height: '36px',
                   borderRadius: '50%',
                   border: 'none',
-                  background: isVoiceMode ? '#ffebee' : '#f0f0f0',
-                  color: isVoiceMode ? '#ff4e00' : '#666',
+                  background: isVoiceMode ? 'rgba(234, 166, 57, 0.15)' : '#f0f0f0',
+                  color: isVoiceMode ? '#EAA639' : '#666',
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
@@ -910,8 +933,8 @@ const AIAssistantOverlay = () => {
                   borderRadius: '50%',
                   border: 'none',
                   background: isVoiceMode
-                    ? ((micState === 'RECORDING' || micState === 'LISTENING') ? '#ff4e00' : '#e0e0e0')
-                    : ((inputText.trim().length > 0 && !isLoading) ? '#ff4e00' : '#e0e0e0'),
+                    ? ((micState === 'RECORDING' || micState === 'LISTENING') ? '#EAA639' : '#e0e0e0')
+                    : ((inputText.trim().length > 0 && !isLoading) ? '#EAA639' : '#e0e0e0'),
                   color: '#fff',
                   cursor: isVoiceMode
                     ? ((micState === 'RECORDING' || micState === 'LISTENING') ? 'pointer' : 'default')

@@ -1,591 +1,807 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react'
-import { useNavigate, useLocation } from 'react-router-dom'
+import React, { useState, useEffect, useMemo, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useLanguage } from '../context/LanguageContext'
 import { useCart } from '../context/CartContext'
-import { useVoiceAgent } from '../context/VoiceAgentContext'
 import Header from '../components/Header'
-// Menu data is fetched directly below
-import '../styles/pages.css'
+import { DEFAULT_CATEGORIES, DEFAULT_MENU_ITEMS } from '../data/menuData'
 import '../styles/dinein.css'
-
-
-function MenuCard({ item, qty, onAdd, onInc, onDec, onUpdateQty, hasActiveOrder }) {
-  const { t, language } = useLanguage()
-  const [imgError, setImgError] = useState(false)
-  return (
-    <div className="fg-card">
-      <div className="fg-card-image-wrap">
-        {item.image && !imgError ? (
-          <img
-            src={item.image}
-            alt={item.name}
-            className="fg-card-img"
-            onError={() => setImgError(true)}
-          />
-        ) : (
-          <div className="di-card-emoji-wrap">
-            <span className="di-card-emoji">{item.emoji || '🍽️'}</span>
-          </div>
-        )}
-      </div>
-
-      <div className="fg-card-content">
-        <h3 className="fg-card-title">
-          {language === 'Tamil' && item.tamilName ? item.tamilName : item.name}
-        </h3>
-        <p className="fg-card-desc">{language === 'Tamil' && item.tamilDesc ? item.tamilDesc : item.description}</p>
-      </div>
-
-      <div className="fg-card-footer">
-        <span className="fg-card-price">Rs. {item.price}</span>
-        <div className={`fg-card-status ${item.available ? 'avail' : 'unavail'}`}>
-          <span className="fg-card-dot" />
-          {item.available ? t('available') : t('notAvailable')}
-        </div>
-      </div>
-
-      <div className="fg-card-controls">
-        {hasActiveOrder ? (
-          <div className="fg-qty-container" style={{ opacity: 0.5 }}>
-            <span style={{ fontSize: '0.9rem', color: '#666', fontWeight: 'bold' }}>Active Order In Progress</span>
-          </div>
-        ) : (
-          <div className="fg-qty-container">
-            <button onClick={() => onDec(item.id)} className="fg-qty-btn minus" disabled={qty === 0}>
-              <span>−</span>
-            </button>
-            <div className="fg-qty-display">
-              <input 
-                type="text"
-                inputMode="numeric"
-                value={qty === 0 ? '' : qty}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  if (val === '') {
-                    if (qty > 0) onUpdateQty(item.id, 0);
-                    return;
-                  }
-                  const num = parseInt(val, 10);
-                  if (!isNaN(num) && num >= 0) {
-                    if (qty === 0 && num > 0) {
-                      onAdd(item, num);
-                    } else {
-                      onUpdateQty(item.id, num);
-                    }
-                  }
-                }}
-                onBlur={(e) => {
-                  if (e.target.value === '') {
-                    onUpdateQty(item.id, 0);
-                  }
-                }}
-                placeholder="0"
-                style={{
-                  width: '100%',
-                  border: 'none',
-                  textAlign: 'center',
-                  background: 'transparent',
-                  fontWeight: '600',
-                  fontFamily: 'inherit',
-                  fontSize: '1.2rem',
-                  color: '#333',
-                  outline: 'none'
-                }}
-              />
-            </div>
-            <button onClick={() => item.available ? (qty === 0 ? onAdd(item) : onInc(item.id)) : null} className="fg-qty-btn plus" disabled={!item.available}>
-              <span>+</span>
-            </button>
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
+import '../styles/home.css'
+import '../styles/flow_screens.css'
 
 export default function TakeAway() {
   const navigate = useNavigate()
-  const location = useLocation()
-  const { t, language } = useLanguage()
-  const { isAgentOpen } = useVoiceAgent()
+  const { t } = useLanguage()
   const {
     cart,
-    setCart,
     addToCart,
     changeQty,
-    updateItemQuantity,
+    removeCartItem,
     updateNote,
-    totalItems,
-    subtotal: totalAmount,
-    activeCategory,
-    setActiveCategory,
-    isCartOpen,
-    setIsCartOpen,
-    hasActiveOrder
+    clearCart,
+    tableNumber
   } = useCart()
 
   const [searchQuery, setSearchQuery] = useState('')
-
-  const [topHeight] = useState(100)
-  const [cardScale] = useState(1.0)
-
-  const [activeRegion, setActiveRegion] = useState('all')
-  const [menuCategories, setMenuCategories] = useState([{ id: 'all', name: 'All', image: null, region: 'all' }])
-  const [menuItems, setMenuItems] = useState({ all: [] })
-  const [loading, setLoading] = useState(true)
-
-  const getQty = id => cart.find(c => c.id === id)?.quantity ?? 0
-  const [showFilterDropdown, setShowFilterDropdown] = useState(false)
+  const [activeCategory, setActiveCategory] = useState('all')
   const [filterOption, setFilterOption] = useState('all')
-  const [sortOption, setSortOption] = useState('default')
-  const filterDropdownRef = useRef(null)
+  const [showFilterDropdown, setShowFilterDropdown] = useState(false)
+
+  // Separated features: Voice Chatbot vs View Cart drawer
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false)
+  const [isCartDrawerOpen, setIsCartDrawerOpen] = useState(false)
+  const [agentInputText, setAgentInputText] = useState('')
+  const [isAgentTyping, setIsAgentTyping] = useState(false)
+  const [showPrompts, setShowPrompts] = useState(true)
+  const chatStreamRef = useRef(null)
+
+  const INITIAL_TAKEAWAY_GREETING = {
+    id: 'agent-greet-1',
+    sender: 'agent',
+    text: 'Hello! Welcome to Maitre D Takeaway. What would you like to take away today?'
+  }
+
+  const [chatMessages, setChatMessages] = useState([INITIAL_TAKEAWAY_GREETING])
 
   useEffect(() => {
-    if (activeRegion !== 'all') {
-      const validCats = menuCategories.filter(c => c.region === 'all' || c.region === activeRegion);
-      if (!validCats.find(c => c.id === activeCategory)) {
-        setActiveCategory('all');
-      }
-    }
-  }, [activeRegion, menuCategories, activeCategory, setActiveCategory]);
-
-  useEffect(() => {
-    function handleClickOutside(event) {
-      if (filterDropdownRef.current && !filterDropdownRef.current.contains(event.target)) {
-        setShowFilterDropdown(false);
-      }
-    }
-    const handleChangeCategory = (e) => {
-      const catId = e.detail?.categoryId;
-      if (catId) {
-        setActiveCategory(catId);
-        const catObj = menuCategories.find(c => String(c.id) === String(catId));
-        if (catObj) {
-          const isNorthIndian = (name) => {
-             const lower = name.toLowerCase();
-             return lower.includes('north indian') || lower.includes('tandoori') || lower.includes('noodles') || lower.includes('salad') || lower.includes('raitha') || lower.includes('soups');
-          };
-          setActiveRegion(isNorthIndian(catObj.name) ? 'north' : 'south');
-        }
-      }
-    };
-
-    const handleChangeRegion = (e) => {
-      const region = e.detail?.region;
-      if (region) {
-        setActiveRegion(region);
-        setActiveCategory('all');
-      }
-    };
-
-    document.addEventListener("mousedown", handleClickOutside);
-    document.addEventListener('change-category', handleChangeCategory);
-    document.addEventListener('change-region', handleChangeRegion);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-      document.removeEventListener('change-category', handleChangeCategory);
-      document.removeEventListener('change-region', handleChangeRegion);
-    };
-  }, [menuCategories, setActiveCategory, setActiveRegion]);
-
-  useEffect(() => {
-    requestAnimationFrame(() => {
-      setIsCartOpen(false)
-    })
-    
-    // Fetch menu data from backend
-    async function fetchMenuData() {
-      try {
-        const restaurantId = localStorage.getItem('selected_restaurant_id') || '1';
-        const API_BASE = import.meta.env.VITE_API_URL || '';
-        
-        const catRes = await fetch(`${API_BASE}/api/v1/public/menu/categories?restaurant_id=${restaurantId}`);
-        const dbCategories = await catRes.json();
-
-        const itemRes = await fetch(`${API_BASE}/api/v1/public/menu/items?restaurant_id=${restaurantId}`);
-        const dbItems = await itemRes.json();
-
-        const cleanCategoryName = (name) => {
-          if (!name) return '';
-          let clean = name.trim();
-          clean = clean.replace(/\s*\(.*?\)\s*/g, ' ').trim();
-          clean = clean.replace(/varities/ig, 'Varieties');
-          return clean;
-        };
-
-        const isNorthIndian = (name) => {
-           const lower = name.toLowerCase();
-           return lower.includes('north indian') || lower.includes('tandoori') || lower.includes('noodles') || lower.includes('salad') || lower.includes('raitha') || lower.includes('soups');
-        };
-
-        const catIdMap = {};
-        const uniqueCategories = [];
-        const seenNames = new Map();
-
-        for (const cat of dbCategories) {
-          const cleanedName = cleanCategoryName(cat.name);
-          if (!cleanedName) continue;
-          if (cleanedName.includes('_')) continue;
-          
-          const normName = cleanedName.toLowerCase();
-          if (!seenNames.has(normName)) {
-            seenNames.set(normName, cat.id);
-            uniqueCategories.push({ ...cat, name: cleanedName });
-            catIdMap[cat.id] = cat.id;
-          } else {
-            catIdMap[cat.id] = seenNames.get(normName);
-          }
-        }
-
-        const formattedCategories = [
-          { id: 'all', name: 'All', image: null, region: 'all' },
-          ...uniqueCategories.map(c => ({
-            id: String(c.id),
-            name: c.name,
-            image: c.image_url ? (c.image_url.startsWith('http') ? c.image_url : `${API_BASE}${c.image_url}`) : null,
-            region: isNorthIndian(c.name) ? 'north' : 'south'
-          }))
-        ];
-
-        const formattedItems = {};
-        const allItems = [];
-        
-        // Deduplicate items: keep only the highest ID for a given name
-        const uniqueItemsMap = new Map();
-        dbItems.forEach(item => {
-          const normName = (item.name || '').trim().toLowerCase();
-          const existing = uniqueItemsMap.get(normName);
-          if (!existing || item.id > existing.id) {
-            uniqueItemsMap.set(normName, item);
-          }
-        });
-        const deduplicatedDbItems = Array.from(uniqueItemsMap.values());
-
-        deduplicatedDbItems.forEach(item => {
-          const rawCatId = item.category_id;
-          const catId = String(catIdMap[rawCatId] || rawCatId);
-          const formattedItem = {
-            id: Number(item.id),
-            itemCode: item.item_code || String(item.id),
-            name: item.name,
-            tamilName: item.name, // Fallback to english if tamil not available
-            price: Number(item.price),
-            image: item.image_url ? (item.image_url.startsWith('http') ? item.image_url : `${API_BASE}${item.image_url}`) : null,
-            description: item.description,
-            tamilDesc: item.description,
-            available: item.is_available,
-            emoji: '🍽️'
-          };
-
-          if (!formattedItems[catId]) {
-            formattedItems[catId] = [];
-          }
-          formattedItems[catId].push(formattedItem);
-          allItems.push(formattedItem);
-        });
-
-        formattedItems.all = allItems.filter((v, i, a) => a.findIndex(t => t.id === v.id) === i);
-
-        setMenuCategories(formattedCategories);
-        setMenuItems(formattedItems);
-      } catch (err) {
-        console.error("Error fetching menu data:", err);
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchMenuData();
-  }, [])
-  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768)
-  const [showAllItems, setShowAllItems] = useState(false)
-
-  useEffect(() => {
-    const handleResize = () => {
-      setIsMobile(window.innerWidth <= 768)
-    }
-    window.addEventListener('resize', handleResize)
-    return () => window.removeEventListener('resize', handleResize)
+    localStorage.setItem('active_order_type', 'takeaway')
   }, [])
 
+  const scrollToChatBottom = () => {
+    if (chatStreamRef.current) {
+      setTimeout(() => {
+        if (chatStreamRef.current) {
+          chatStreamRef.current.scrollTop = chatStreamRef.current.scrollHeight
+        }
+      }, 50)
+    }
+  }
+
   useEffect(() => {
-    setShowAllItems(false)
-  }, [activeCategory])
+    scrollToChatBottom()
+  }, [chatMessages, isAgentTyping])
 
-  const baseItems = activeCategory === 'all' ? menuItems.all : (menuItems[activeCategory] || []);
+  const TAKEAWAY_PROMPTS = [
+    'Show me popular takeaway dishes',
+    'Add Mutton Curry to takeaway',
+    'Add Chicken Biryani to takeaway',
+    "What are today's specials?"
+  ]
 
-  // Apply search, filters and sorting
-  let processedItems = [...baseItems]
-  if (searchQuery.trim()) {
-    processedItems = processedItems.filter(i => {
-      const name = language === 'Tamil' && i.tamilName ? i.tamilName : i.name;
-      const code = i.itemCode ? i.itemCode.toLowerCase() : '';
-      const query = searchQuery.toLowerCase();
-      return name.toLowerCase().includes(query) || code.includes(query);
+  // Filter items based on category, search, and availability
+  const filteredItems = useMemo(() => {
+    return DEFAULT_MENU_ITEMS.filter(item => {
+      if (activeCategory !== 'all') {
+        const matchesCategory =
+          item.category === activeCategory ||
+          (item.categoryName && item.categoryName.toLowerCase().includes(activeCategory.toLowerCase()))
+        if (!matchesCategory) return false
+      }
+
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase()
+        const matchesName = item.name.toLowerCase().includes(q)
+        const matchesTamil = item.tamilName && item.tamilName.toLowerCase().includes(q)
+        const matchesDesc = item.description && item.description.toLowerCase().includes(q)
+        if (!matchesName && !matchesTamil && !matchesDesc) return false
+      }
+
+      if (filterOption === 'available' && !item.available) return false
+      if (filterOption === 'veg' && !item.isVeg) return false
+      if (filterOption === 'non-veg' && item.isVeg) return false
+
+      return true
     })
-  }
-  if (filterOption === 'available') {
-    processedItems = processedItems.filter(i => i.available)
-  }
-  if (sortOption === 'price-asc') {
-    processedItems.sort((a, b) => a.price - b.price)
-  } else if (sortOption === 'price-desc') {
-    processedItems.sort((a, b) => b.price - a.price)
+  }, [activeCategory, searchQuery, filterOption])
+
+  const getItemQty = (id) => {
+    const found = cart.find(i => i.id === id)
+    return found ? (Number(found.quantity) || 0) : 0
   }
 
-  const displayItems = (isMobile && !showAllItems) ? processedItems.slice(0, 6) : processedItems
+  const handleIncrement = (item) => {
+    if (!item.available) return
+    const current = getItemQty(item.id)
+    if (current === 0) {
+      addToCart(item, 1)
+    } else {
+      changeQty(item.id, 1)
+    }
+  }
+
+  const handleDecrement = (item) => {
+    const current = getItemQty(item.id)
+    if (current > 0) {
+      changeQty(item.id, -1)
+    }
+  }
+
+  // Dynamic voice chatbot responder for takeaway
+  const handleSendMessage = (userText) => {
+    if (!userText || !userText.trim()) return
+    setShowPrompts(false)
+    const cleanText = userText.trim()
+    setAgentInputText('')
+
+    // Add user message to conversation stream
+    const userMsg = {
+      id: `user-${Date.now()}`,
+      sender: 'user',
+      text: cleanText
+    }
+    setChatMessages(prev => [...prev, userMsg])
+    setIsAgentTyping(true)
+    scrollToChatBottom()
+
+    setTimeout(() => {
+      const lower = cleanText.toLowerCase()
+      let agentReply = {
+        id: `agent-${Date.now()}`,
+        sender: 'agent',
+        text: ''
+      }
+
+      // Add dish command
+      if (lower.includes('order') || lower.includes('add') || lower.includes('want') || lower.includes('takeaway')) {
+        let matched = null
+        if (lower.includes('mutton')) {
+          matched = DEFAULT_MENU_ITEMS.find(i => i.name.toLowerCase().includes('mutton')) || {
+            id: 4,
+            name: 'Mutton Curry',
+            price: 260,
+            image: '/assets/images/dishes/mutton_curry.png',
+            serves: '1-2'
+          }
+        } else if (lower.includes('biryani')) {
+          matched = DEFAULT_MENU_ITEMS.find(i => i.name.toLowerCase().includes('biryani')) || {
+            id: 9,
+            name: 'Chicken Biryani',
+            price: 210,
+            image: '/assets/images/dishes/chicken_biryani.png',
+            serves: '1'
+          }
+        } else if (lower.includes('butter chicken') || lower.includes('butter')) {
+          matched = DEFAULT_MENU_ITEMS.find(i => i.name.toLowerCase().includes('butter')) || {
+            id: 8,
+            name: 'Butter Chicken',
+            price: 240,
+            image: '/assets/images/dishes/butter_chicken.png',
+            serves: '1'
+          }
+        } else if (lower.includes('fish')) {
+          matched = DEFAULT_MENU_ITEMS.find(i => i.name.toLowerCase().includes('fish')) || {
+            id: 3,
+            name: 'Fish Fry',
+            price: 190,
+            image: '/assets/images/dishes/fish_fry.png',
+            serves: '1'
+          }
+        } else if (lower.includes('chicken 65')) {
+          matched = DEFAULT_MENU_ITEMS.find(i => i.name.toLowerCase().includes('65')) || {
+            id: 1,
+            name: 'Chicken 65',
+            price: 160,
+            image: '/assets/images/dishes/chicken_65.png',
+            serves: '1'
+          }
+        }
+
+        if (matched) {
+          addToCart(matched, 1)
+          agentReply.text = `Added ${matched.name} to your takeaway order! You can check your items anytime in "View Cart", or let me know what else you'd like!`
+        } else {
+          agentReply.text = "I've noted that! Which delicious dish would you like me to add to your takeaway package?"
+        }
+      } else if (lower.includes('special') || lower.includes('popular') || lower.includes('recommend')) {
+        agentReply.text = "Our top takeaway specials today are fragrant Chicken Biryani, rich Mutton Curry, and crispy Fish Fry. Which would you prefer to try?"
+      } else if (lower.includes('hi') || lower.includes('hello') || lower.includes('hey')) {
+        agentReply.text = "Hello! I am your Maitre D voice assistant for takeaway. Tell me what you crave, or tap any suggestion to get started!"
+      } else {
+        agentReply.text = `Understood! I'm here to assist with your takeaway order. Would you like to order popular dishes like Biryani or Mutton Curry?`
+      }
+
+      setChatMessages(prev => [...prev, agentReply])
+      setIsAgentTyping(false)
+      scrollToChatBottom()
+    }, 700)
+  }
+
+  const handlePromptClick = (promptText) => {
+    setShowPrompts(false)
+    handleSendMessage(promptText)
+  }
+
+  const handleSendInput = (e) => {
+    e.preventDefault()
+    if (!agentInputText || !agentInputText.trim()) return
+    setShowPrompts(false)
+    handleSendMessage(agentInputText)
+  }
 
   return (
-    <div className={`app-container ${isAgentOpen ? 'agent-open' : ''}`}>
-      <div className="background-image" />
-      <Header tableNumber="06" showFullHeader={true} useTitleImage={true} hideTableIndicator={true} />
+    <div className="menu-page-container">
+      {/* Top Header Navigation matching the Wireframe */}
+      <Header
+        tableNumber="Take Away"
+        menuWireframeHeader={true}
+        showDateTime={true}
+        showServiceBell={false}
+      />
 
-      <main className="di-main">
-        <div className="di-seg-top">
-          <div className="di-topbar">
-            <div className="di-search-wrap">
-              <input 
-                className="di-search-input" 
-                placeholder={t('searchPlaceholder')} 
-                value={searchQuery} 
-                onChange={e => setSearchQuery(e.target.value)} 
-                onKeyDown={e => {
-                  if (e.key === 'Enter') {
-                    const query = searchQuery.trim().toLowerCase();
-                    if (!query) return;
-                    
-                    let itemToAdd = processedItems.find(i => i.itemCode && i.itemCode.toLowerCase() === query);
-                    if (!itemToAdd && processedItems.length === 1) {
-                      itemToAdd = processedItems[0];
-                    }
-                    
-                    if (itemToAdd && itemToAdd.available && !hasActiveOrder) {
-                      const qty = getQty(itemToAdd.id);
-                      if (qty === 0) {
-                        addToCart(itemToAdd);
-                      } else {
-                        changeQty(itemToAdd.id, 1);
-                      }
-                      setSearchQuery('');
-                    }
-                  }
-                }}
-              />
-              <i className="fa-solid fa-magnifying-glass di-search-icon" />
-            </div>
-            <div className="di-topbar-right" ref={filterDropdownRef} style={{ position: 'relative' }}>
-              <button 
-                className={`di-filter-btn ${showFilterDropdown ? 'active' : ''} ${(filterOption !== 'all' || sortOption !== 'default') ? 'applied' : ''}`} 
-                onClick={() => setShowFilterDropdown(!showFilterDropdown)}
-              >
-                <i className="fa-solid fa-sliders" />
-                {(filterOption !== 'all' || sortOption !== 'default') && (
-                  <span className="filter-active-dot" />
-                )}
-              </button>
-              <button className="di-new-order-btn" onClick={() => { setCart([]); setSearchQuery(''); setIsCartOpen(false); }} disabled={hasActiveOrder}>
-                <i className="fa-solid fa-plus" />
-                {t('newOrder')}
-              </button>
+      {/* Main 2-Column Content */}
+      <main className={`menu-main-layout ${!isSidebarOpen ? 'sidebar-collapsed' : ''}`}>
+        {/* Left Column: Menu Items */}
+        <section className="menu-left-column">
+          {/* Top Card: Search, Filter, New Order & Category Pills */}
+          <div className="menu-top-card">
+            <div className="menu-search-row">
+              {/* Search Bar */}
+              <div className="menu-search-bar">
+                <input
+                  type="text"
+                  className="menu-search-input"
+                  placeholder={t('searchPlaceholder') || 'Search for food......'}
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+                <i className="fa-solid fa-magnifying-glass menu-search-icon" />
+              </div>
 
-              {showFilterDropdown && (
-                <div className="filter-dropdown-menu">
-                  <div className="filter-dropdown-section">
-                    <h4>{language === 'Tamil' ? 'வடிகட்டு' : 'Filter'}</h4>
-                    <button className={`filter-opt-btn ${filterOption === 'all' ? 'selected' : ''}`} onClick={() => { setFilterOption('all'); setShowFilterDropdown(false); }}>
-                      {language === 'Tamil' ? 'அனைத்தும்' : 'All Items'}
+              {/* Filter Button */}
+              <div style={{ position: 'relative' }}>
+                <button
+                  className="menu-filter-btn"
+                  onClick={() => setShowFilterDropdown(!showFilterDropdown)}
+                  title="Filter options"
+                  type="button"
+                >
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="4" y1="21" x2="4" y2="14" />
+                    <line x1="4" y1="10" x2="4" y2="3" />
+                    <line x1="12" y1="21" x2="12" y2="12" />
+                    <line x1="12" y1="8" x2="12" y2="3" />
+                    <line x1="20" y1="21" x2="20" y2="16" />
+                    <line x1="20" y1="12" x2="20" y2="3" />
+                    <line x1="1" y1="14" x2="7" y2="14" />
+                    <line x1="9" y1="8" x2="15" y2="8" />
+                    <line x1="17" y1="16" x2="23" y2="16" />
+                  </svg>
+                </button>
+
+                {showFilterDropdown && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: 'calc(100% + 8px)',
+                      left: 0,
+                      background: '#ffffff',
+                      borderRadius: '12px',
+                      padding: '10px',
+                      boxShadow: '0 10px 30px rgba(0,0,0,0.18)',
+                      zIndex: 100,
+                      minWidth: '160px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '6px'
+                    }}
+                  >
+                    <button
+                      style={{
+                        padding: '8px 12px',
+                        border: 'none',
+                        background: filterOption === 'all' ? '#EAA639' : '#f4f4f5',
+                        borderRadius: '8px',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        textAlign: 'left'
+                      }}
+                      onClick={() => { setFilterOption('all'); setShowFilterDropdown(false); }}
+                    >
+                      All Items
                     </button>
-                    <button className={`filter-opt-btn ${filterOption === 'available' ? 'selected' : ''}`} onClick={() => { setFilterOption('available'); setShowFilterDropdown(false); }}>
-                      {language === 'Tamil' ? 'கிடைப்பவை மட்டும்' : 'Available Only'}
+                    <button
+                      style={{
+                        padding: '8px 12px',
+                        border: 'none',
+                        background: filterOption === 'available' ? '#EAA639' : '#f4f4f5',
+                        borderRadius: '8px',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        textAlign: 'left'
+                      }}
+                      onClick={() => { setFilterOption('available'); setShowFilterDropdown(false); }}
+                    >
+                      Available Only
                     </button>
                   </div>
-                  <div className="filter-dropdown-divider" />
-                  <div className="filter-dropdown-section">
-                    <h4>{language === 'Tamil' ? 'விலை வாரியாக' : 'Sort by Price'}</h4>
-                    <button className={`filter-opt-btn ${sortOption === 'default' ? 'selected' : ''}`} onClick={() => { setSortOption('default'); setShowFilterDropdown(false); }}>
-                      {language === 'Tamil' ? 'இயல்புநிலை' : 'Default'}
-                    </button>
-                    <button className={`filter-opt-btn ${sortOption === 'price-asc' ? 'selected' : ''}`} onClick={() => { setSortOption('price-asc'); setShowFilterDropdown(false); }}>
-                      {language === 'Tamil' ? 'குறைவிலிருந்து அதிகம்' : 'Low to High'}
-                    </button>
-                    <button className={`filter-opt-btn ${sortOption === 'price-desc' ? 'selected' : ''}`} onClick={() => { setSortOption('price-desc'); setShowFilterDropdown(false); }}>
-                      {language === 'Tamil' ? 'அதிகத்திலிருந்து குறைவு' : 'High to Low'}
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="di-region-tabs-wrap">
-            <button className={`di-region-tab ${activeRegion === 'all' ? 'active' : ''}`} onClick={() => setActiveRegion('all')}>
-              All Regions
-            </button>
-            <button className={`di-region-tab ${activeRegion === 'south' ? 'active' : ''}`} onClick={() => setActiveRegion('south')}>
-              South Indian
-            </button>
-            <button className={`di-region-tab ${activeRegion === 'north' ? 'active' : ''}`} onClick={() => setActiveRegion('north')}>
-              North Indian
-            </button>
-          </div>
-          <div className="di-tabs-wrap">
-            {menuCategories.filter(cat => activeRegion === 'all' || cat.region === 'all' || cat.region === activeRegion).map(cat => (
-              <button key={cat.id} className={`di-tab ${activeCategory === cat.id ? 'active' : ''}`} onClick={() => setActiveCategory(cat.id)}>
-                {cat.image && <img src={cat.image} alt={t(cat.name)} className="di-tab-img" onError={e => { e.target.onerror = null; e.target.style.display = 'none'; }} />}
-                <span>{language === 'Tamil' && cat.tamilName ? cat.tamilName : t(cat.name)}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="di-seg-bottom">
-          <div className="di-section-header">
-            <h2 className="di-section-title">
-              {t(menuCategories.find(c => c.id === activeCategory)?.name || 'Menu')}
-              <span className="di-section-count">{displayItems.length} {t('items')}</span>
-            </h2>
-          </div>
-          <div className="di-grid di-grid-5" style={{ '--card-scale': cardScale }}>
-            {displayItems.length === 0
-              ? <div className="di-empty">No items found.</div>
-              : displayItems.map(item => (
-                <MenuCard key={item.id} item={item} qty={getQty(item.id)} onAdd={addToCart} onInc={id => changeQty(id, 1)} onDec={id => changeQty(id, -1)} onUpdateQty={updateItemQuantity} hasActiveOrder={hasActiveOrder} />
-              ))
-            }
-          </div>
-          {isMobile && processedItems.length > 6 && (
-            <div className="di-show-more-wrap" style={{ display: 'flex', justifyContent: 'center', marginTop: '15px' }}>
-              <button 
-                className="di-show-more-btn" 
-                onClick={() => setShowAllItems(!showAllItems)}
-                style={{
-                  background: '#ff3400',
-                  color: 'white',
-                  border: 'none',
-                  padding: '10px 20px',
-                  borderRadius: '30px',
-                  fontWeight: '600',
-                  fontSize: '0.9rem',
-                  cursor: 'pointer',
-                  boxShadow: '0 4px 10px rgba(255, 52, 0, 0.2)'
-                }}
-              >
-                {showAllItems ? (
-                  <>
-                    {language === 'Tamil' ? 'குறைவாகக் காட்டு' : 'Show Less'}{' '}
-                    <i className="fa-solid fa-chevron-up" style={{ marginLeft: '6px' }} />
-                  </>
-                ) : (
-                  <>
-                    {language === 'Tamil' ? 'மேலும் காட்டு' : 'Show More'}{' '}
-                    <i className="fa-solid fa-chevron-down" style={{ marginLeft: '6px' }} />
-                  </>
                 )}
+              </div>
+
+              {/* New Order Button */}
+              <button
+                className="menu-new-order-btn"
+                onClick={() => {
+                  clearCart()
+                  setSearchQuery('')
+                  setActiveCategory('all')
+                }}
+                type="button"
+              >
+                <span>New Order</span>
+                <span style={{ fontSize: '1.2rem', lineHeight: '0.8', marginLeft: '2px' }}>+</span>
               </button>
             </div>
-          )}
-        </div>
 
-        {totalItems > 0 && !isCartOpen && !hasActiveOrder && (
-          <button className="di-view-cart-btn" onClick={() => { setIsCartOpen(true) }}>
-            <i className="fa-solid fa-cart-shopping" />
-            <span>{t('viewCart')}</span>
-            <span className="di-cart-badge">{totalItems}</span>
-          </button>
-        )}
-      </main>
-
-      {/* Cart sidebar (Floating) - Moved outside di-main for z-index layering */}
-      {isCartOpen && (
-        <div className="di-sidebar di-cart-mode active">
-          <div className="di-cart-header">
-            <div className="di-cart-header-left">
-              <span className="di-cart-title">{t('cart') || 'Cart'}</span>
+            {/* Category Pills Row */}
+            <div className="menu-categories-scroll">
+              {DEFAULT_CATEGORIES.map(cat => {
+                const isActive = activeCategory === cat.id
+                return (
+                  <button
+                    key={cat.id}
+                    className={`menu-category-btn ${isActive ? 'active' : ''}`}
+                    onClick={() => setActiveCategory(cat.id)}
+                    type="button"
+                  >
+                    {cat.iconType === 'pot' ? (
+                      <div className="menu-cat-icon">
+                        <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M5 13h14v5a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-5z" />
+                          <line x1="3.5" y1="13" x2="20.5" y2="13" />
+                          <line x1="5" y1="9.5" x2="19" y2="7.5" />
+                          <path d="M10 8.5a2.2 2.2 0 0 1 3.8-.5" />
+                        </svg>
+                      </div>
+                    ) : (
+                      <img src={cat.image} alt={cat.name} className="menu-cat-thumb" />
+                    )}
+                    <span className="menu-cat-name">{cat.name}</span>
+                  </button>
+                )
+              })}
             </div>
-            <button className="di-cart-close" onClick={() => setIsCartOpen(false)}>✕</button>
-          </div>
-          <div className="di-cart-order-id"># New Order</div>
-
-          <div className="di-order-type-tabs">
-            <button className="di-ot-tab active" style={{ width: '100%' }}><i className="fa-solid fa-bag-shopping" /> {t('takeAway')}</button>
           </div>
 
-          <div className="di-cart-items">
-            {cart.length === 0
-              ? <p className="di-cart-empty">Cart is empty. Add items from the menu.</p>
-              : cart.map(item => (
-                <div key={item.id} className="di-cart-item-container">
-                  <button className="di-cart-remove-circle" onClick={() => setCart(p => p.filter(c => c.id !== item.id))}>✕</button>
-                  <div className="di-cart-item-body">
-                    <div className="di-cart-item-thumb">
-                      {item.image ? <img src={item.image} alt={item.name} /> : <span className="di-cart-thumb-emoji">{item.emoji || '🍽️'}</span>}
+          {/* Bottom Card: Dishes Grid */}
+          <div className="menu-dishes-card">
+            <div className="menu-dishes-grid">
+              {filteredItems.map(item => {
+                const qty = getItemQty(item.id)
+                return (
+                  <div key={item.id} className="dish-card">
+                    <div className="dish-image-wrap">
+                      <img src={item.image} alt={item.name} className="dish-img" />
                     </div>
-                    <div className="di-cart-item-details">
-                      <p className="di-cart-item-name">{language === 'Tamil' && item.tamilName ? item.tamilName : item.name}</p>
-                      <p className="di-cart-serves">{t('serves')} : 1</p>
-                      <p className="di-cart-item-price">Rs. {item.price}</p>
+
+                    <div className="dish-card-body">
+                      <div className="dish-header-row">
+                        <h3 className="dish-title">{item.name}</h3>
+                        <span className={`dish-badge ${item.available ? 'available' : 'unavailable'}`}>
+                          {item.available ? 'Available' : 'Not Available'}
+                        </span>
+                      </div>
+
+                      <p className="dish-desc">{item.description}</p>
+
+                      <div className="dish-price">Rs. {item.price}</div>
                     </div>
-                    <div className="di-cart-item-right">
-                      <p className="di-cart-total-label">Total</p>
-                      <p className="di-cart-total-amount">{(item.price * item.quantity).toFixed(2)}</p>
-                      <div className="di-cart-stepper">
-                        <button className="di-cart-qty-btn minus" onClick={() => changeQty(item.id, -1)}>−</button>
-                        <input 
-                          className="di-cart-qty-num"
-                          type="text"
-                          inputMode="numeric"
-                          value={item.quantity === 0 ? '' : item.quantity}
-                          onChange={(e) => {
-                            let val = e.target.value.replace(/[^0-9]/g, '');
-                            if (val === '') {
-                              updateItemQuantity(item.id, '');
-                              return;
-                            }
-                            const num = parseInt(val, 10);
-                            if (!isNaN(num) && num >= 0) {
-                              updateItemQuantity(item.id, num);
-                            }
-                          }}
-                          onBlur={(e) => {
-                            if (item.quantity === '' || parseInt(item.quantity, 10) === 0) {
-                              updateItemQuantity(item.id, 0);
-                            }
-                          }}
-                          style={{
-                            width: '40px',
-                            border: 'none',
-                            textAlign: 'center',
-                            background: 'transparent',
-                            fontWeight: 'bold',
-                            fontFamily: 'inherit',
-                            fontSize: '1rem',
-                            color: 'inherit',
-                            outline: 'none'
-                          }}
-                        />
-                        <button className="di-cart-qty-btn plus" onClick={() => changeQty(item.id, 1)}>+</button>
+
+                    <div className="dish-footer-row">
+                      <div className="dish-stepper">
+                        <button
+                          className="dish-stepper-btn minus"
+                          onClick={() => handleDecrement(item)}
+                          disabled={qty === 0}
+                          type="button"
+                        >
+                          −
+                        </button>
+                        <span className="dish-stepper-val">{qty}</span>
+                        <button
+                          className="dish-stepper-btn plus"
+                          onClick={() => handleIncrement(item)}
+                          disabled={!item.available}
+                          type="button"
+                        >
+                          +
+                        </button>
+                      </div>
+
+                      <span className={`dish-diet-tag ${item.isVeg ? 'veg' : 'non-veg'}`}>
+                        {item.isVeg ? 'VEG' : 'NON-VEG'}
+                      </span>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            <div className="menu-scroll-indicator">
+              <div className="menu-scroll-thumb" />
+            </div>
+
+            {/* Separate Feature 1: Floating View Cart Button at bottom right */}
+            {cart.length > 0 && !isCartDrawerOpen && (
+              <button
+                className="floating-view-cart-btn"
+                onClick={() => {
+                  setIsCartDrawerOpen(true)
+                  setIsSidebarOpen(false)
+                }}
+                type="button"
+                title="View Cart"
+              >
+                <i className="fa-solid fa-cart-shopping" />
+                <span>View Cart</span>
+                <span className="floating-cart-count-badge">
+                  {cart.reduce((s, it) => s + (Number(it.quantity) || 1), 0)}
+                </span>
+              </button>
+            )}
+
+            {/* Separate Feature 2: Dedicated View Cart Drawer */}
+            {isCartDrawerOpen && (
+              <>
+                <div
+                  className="manual-cart-backdrop"
+                  onClick={() => setIsCartDrawerOpen(false)}
+                  title="Close Cart"
+                />
+                <aside className="manual-cart-drawer">
+                  <div>
+                    <div className="manual-cart-drawer-header">
+                      <span className="manual-cart-drawer-title">Cart</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <span className="manual-cart-drawer-table">Take Away 🛍️</span>
+                        <button
+                          className="manual-cart-drawer-close"
+                          onClick={() => setIsCartDrawerOpen(false)}
+                          title="Close Cart"
+                          type="button"
+                          aria-label="Close Cart"
+                        >
+                          ✕
+                        </button>
                       </div>
                     </div>
+
+                    <div className="manual-cart-order-id-label"># Order ID : 3001</div>
+
+                    {/* Mode Tabs */}
+                    <div className="manual-cart-type-tabs">
+                      <button
+                        className="manual-cart-type-tab"
+                        onClick={() => navigate('/dine-in')}
+                        type="button"
+                      >
+                        <span>Dine In</span>
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M6 3v5a2 2 0 0 0 2 2h0a2 2 0 0 0 2-2V3" />
+                          <path d="M8 3v5" />
+                          <path d="M8 10v11" />
+                          <path d="M16 3v9a2 2 0 0 1-2-2V3" />
+                          <path d="M16 12v9" />
+                        </svg>
+                      </button>
+                      <button className="manual-cart-type-tab active" type="button">
+                        <span>Take Away</span>
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <rect x="4" y="6" width="16" height="15" rx="3" />
+                          <path d="M4 8l3-4h10l3 4" />
+                          <path d="M9 11a3 3 0 0 0 6 0" />
+                        </svg>
+                      </button>
+                    </div>
+
+                    {/* Items List */}
+                    <div className="manual-cart-items-list">
+                      {cart.length === 0 ? (
+                        <div style={{ textAlign: 'center', padding: '32px 16px', color: '#9ca3af', fontSize: '0.9rem' }}>
+                          Your takeaway cart is empty. Add delicious items from the menu!
+                        </div>
+                      ) : (
+                        cart.map(item => {
+                          const itemTotal = (Number(item.price) || 0) * (Number(item.quantity) || 1)
+                          return (
+                            <div key={item.id} className="manual-cart-card">
+                              <div className="manual-cart-card-top">
+                                <img
+                                  src={item.image || '/assets/images/dishes/chicken_biryani.png'}
+                                  alt={item.name}
+                                  className="manual-cart-thumb"
+                                />
+                                <div className="manual-cart-info">
+                                  <div className="manual-cart-name">{item.name}</div>
+                                  <div className="manual-cart-serves">Serves : {item.serves || '1-2'}</div>
+                                  <div className="manual-cart-unit-price">Rs. {item.price}</div>
+                                </div>
+                                <div className="manual-cart-total-col">
+                                  <div className="manual-cart-total-label">Total</div>
+                                  <div className="manual-cart-total-val">{itemTotal.toFixed(2)}</div>
+                                  <div className="manual-cart-gst-tag">+ GST</div>
+                                </div>
+                              </div>
+
+                              <div className="manual-cart-card-actions">
+                                <button
+                                  className="manual-cart-remove-link"
+                                  onClick={() => removeCartItem(item.id)}
+                                  type="button"
+                                >
+                                  Remove item ×
+                                </button>
+                                <div className="dish-stepper">
+                                  <button
+                                    className="dish-stepper-btn minus"
+                                    onClick={() => changeQty(item.id, -1)}
+                                    type="button"
+                                  >
+                                    −
+                                  </button>
+                                  <span className="dish-stepper-val">{item.quantity}</span>
+                                  <button
+                                    className="dish-stepper-btn plus"
+                                    onClick={() => changeQty(item.id, 1)}
+                                    type="button"
+                                  >
+                                    +
+                                  </button>
+                                </div>
+                              </div>
+
+                              <div className="manual-cart-note-box">
+                                <input
+                                  type="text"
+                                  placeholder="Special instructions..."
+                                  value={item.note || ''}
+                                  onChange={(e) => updateNote(item.id, e.target.value)}
+                                  style={{
+                                    width: '100%',
+                                    border: 'none',
+                                    outline: 'none',
+                                    background: 'transparent',
+                                    fontFamily: 'inherit',
+                                    fontSize: '0.82rem',
+                                    color: '#52525b'
+                                  }}
+                                />
+                              </div>
+                            </div>
+                          )
+                        })
+                      )}
+                    </div>
                   </div>
-                  <div className="di-cart-note-wrap">
-                    <input className="di-cart-note-input" placeholder="Please, Just a little bit spicy only...." value={item.note || ''} onChange={e => updateNote(item.id, e.target.value)} />
+
+                  <div>
+                    <button
+                      className="manual-cart-place-btn"
+                      onClick={() => {
+                        if (cart.length === 0) {
+                          alert('Please add at least one dish to your takeaway order.')
+                          return
+                        }
+                        navigate('/takeaway-checkout')
+                      }}
+                      type="button"
+                    >
+                      Place Order
+                    </button>
+                  </div>
+                </aside>
+              </>
+            )}
+          </div>
+        </section>
+
+        {/* Right Column: Dedicated Voice Chatbot (Feature 3) */}
+        {isSidebarOpen ? (
+          <aside className="menu-right-sidebar voice-panel-mode">
+            <div className="voice-agent-container">
+              {/* Top Pane: Header and Chef Avatar */}
+              <div className="voice-agent-top-pane">
+                <div className="voice-agent-header-row">
+                  <span className="voice-agent-header-title">Talk to your Maitre D</span>
+                  <button
+                    className="voice-agent-close-btn"
+                    onClick={() => setIsSidebarOpen(false)}
+                    title="Close Voice Assistant"
+                    type="button"
+                    aria-label="Close Voice Assistant"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                {/* Compact Chef Avatar with Waveform */}
+                <div className="voice-agent-visual-center compact">
+                  <div className="voice-agent-waveform-bars">
+                    {Array.from({ length: 28 }).map((_, i) => (
+                      <div
+                        key={i}
+                        className="voice-wave-bar"
+                        style={{
+                          animationDelay: `${(i % 5) * 0.2}s`,
+                          height: `${8 + (Math.sin(i * 1.5) + 1) * 10}px`
+                        }}
+                      />
+                    ))}
+                  </div>
+                  <img
+                    src="/assets/images/chef_avatar_bust.png"
+                    alt="AI Voice Agent"
+                    className="voice-agent-chef-img"
+                  />
+                  <div className="voice-agent-mic-badge" title="Maitre D Listening">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" />
+                      <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                      <line x1="12" y1="19" x2="12" y2="23" />
+                    </svg>
                   </div>
                 </div>
-              ))
-            }
-          </div>
 
-          <div className="di-cart-footer">
-            <button className="di-add-more-btn" onClick={() => setIsCartOpen(false)}>
-              <i className="fa-solid fa-plus" /> {t('addMore')}
+                {/* Suggestion Prompts - Hidden after user clicks or starts chatting */}
+                {showPrompts && (
+                  <div className="voice-prompt-list">
+                    {TAKEAWAY_PROMPTS.map((promptText, idx) => (
+                      <button
+                        key={idx}
+                        className="voice-prompt-pill"
+                        onClick={() => handlePromptClick(promptText)}
+                        type="button"
+                      >
+                        <div className="prompt-pill-icon">
+                          <svg viewBox="0 0 24 24" width="16" height="16" fill="none">
+                            <circle cx="9.5" cy="7.5" r="3.5" fill="#EAA639" />
+                            <path d="M3.5 18c0-3 2.7-5 6-5s6 2 6 5" fill="#EAA639" />
+                            <path d="M17.5 9a3.5 3.5 0 0 1 0 5" stroke="#EAA639" strokeWidth="2.2" strokeLinecap="round" />
+                            <path d="M20.5 7a6.5 6.5 0 0 1 0 9" stroke="#EAA639" strokeWidth="2.2" strokeLinecap="round" />
+                          </svg>
+                        </div>
+                        <span className="prompt-pill-text">{promptText}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Middle Pane: Dynamic Conversation Stream (Auto-scrolls & Communicates) */}
+              <div className="voice-chat-stream" ref={chatStreamRef}>
+                {chatMessages.map((msg) => {
+                  if (msg.sender === 'agent') {
+                    return (
+                      <div key={msg.id} className="chat-row-agent">
+                        <img
+                          src="/assets/images/chef_avatar_head.png"
+                          alt="Chef"
+                          className="chat-avatar-chef"
+                        />
+                        <div className="chat-agent-bubble-wrap">
+                          {msg.text && (
+                            <div className="chat-bubble-agent-text">
+                              {msg.text}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  }
+
+                  // User Message
+                  return (
+                    <div key={msg.id} className="chat-row-user">
+                      <div className="chat-bubble-user-text">
+                        {msg.text}
+                      </div>
+                      <div className="chat-avatar-user-badge">
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                          <circle cx="12" cy="7" r="4" />
+                        </svg>
+                      </div>
+                    </div>
+                  )
+                })}
+
+                {/* Typing Indicator */}
+                {isAgentTyping && (
+                  <div className="chat-row-agent">
+                    <img
+                      src="/assets/images/chef_avatar_head.png"
+                      alt="Chef"
+                      className="chat-avatar-chef"
+                    />
+                    <div className="chat-bubble-agent-typing">
+                      <span />
+                      <span />
+                      <span />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Bottom Pane: Input Pill + View Cart Switcher */}
+              <div className="voice-agent-bottom-pane">
+                <form className="voice-bottom-input-wrap" onSubmit={handleSendInput}>
+                  <input
+                    type="text"
+                    className="voice-bottom-input"
+                    placeholder="Tap To Speak Or Type Here...."
+                    value={agentInputText}
+                    onChange={(e) => {
+                      setAgentInputText(e.target.value)
+                      scrollToChatBottom()
+                    }}
+                    onFocus={scrollToChatBottom}
+                  />
+                  <button className="voice-mic-submit-btn" type="submit" title="Send or Speak">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#EAA639" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" />
+                      <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                      <line x1="12" y1="19" x2="12" y2="23" />
+                      <path d="M19 3v2" stroke="#EAA639" strokeWidth="1.8" />
+                      <path d="M18 4h2" stroke="#EAA639" strokeWidth="1.8" />
+                    </svg>
+                  </button>
+                </form>
+
+                {!showPrompts && (
+                  <div style={{ display: 'flex', justifyContent: 'center', margin: '2px 0 0 0' }}>
+                    <button
+                      type="button"
+                      onClick={() => setShowPrompts(true)}
+                      style={{
+                        background: 'transparent',
+                        border: 'none',
+                        color: '#b47820',
+                        fontSize: '0.78rem',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        padding: '2px 8px',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '4px'
+                      }}
+                      title="Show suggestion prompts"
+                    >
+                      <span>💡 Suggestions</span>
+                    </button>
+                  </div>
+                )}
+
+                <div className="sidebar-panel-mode-switch">
+                  <button
+                    className="sidebar-switch-link"
+                    onClick={() => {
+                      setIsCartDrawerOpen(true)
+                      setIsSidebarOpen(false)
+                    }}
+                    type="button"
+                  >
+                    View Cart & Place Order ({cart.length}) ➔
+                  </button>
+                </div>
+              </div>
+            </div>
+          </aside>
+        ) : !isCartDrawerOpen ? (
+          /* Separate Feature 4: Chatbot Icon at right side top (like in Dine-In) */
+          <div className="menu-sidebar-toggle-wrap">
+            <button
+              className="menu-sidebar-open-pill"
+              onClick={() => {
+                setIsSidebarOpen(true)
+                setIsCartDrawerOpen(false)
+              }}
+              title="Open Voice Chatbot"
+              type="button"
+            >
+              <span className="open-pill-chevron">«</span>
+              <img src="/assets/images/chef_avatar_head.png" alt="Chef Agent" className="open-pill-avatar" />
             </button>
-            <button className="di-place-order-btn" disabled={cart.length === 0} onClick={() => { setIsCartOpen(false); navigate('/takeaway-checkout'); }}>
-              {t('confirmOrder')}
-            </button>
           </div>
-        </div>
-      )}
-
-
+        ) : null}
+      </main>
     </div>
   )
 }

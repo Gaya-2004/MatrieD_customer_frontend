@@ -1,15 +1,17 @@
 @import url("https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Poppins:wght@400;500;600;700&family=Rubik:wght@400;500;600&display=swap");
 
 :root {
-    --primary-orange: #FF5A00;
-    --primary-green: #2F882C;
-    --dark-green: #0F5E16;
+    --primary-gold: #EAA639;
+    --primary-gold-dark: #D89228;
+    --primary-orange: #EAA639;
+    --primary-green: #EAA639;
+    --dark-green: #D89228;
     --text-light: #F5F5F5;
-    --text-dark: #333333;
+    --text-dark: #18181b;
     --glass-bg: rgba(255, 255, 255, 0.2);
     --glass-border: rgba(255, 255, 255, 0.4);
     --shadow-soft: 0 8px 32px rgba(0, 0, 0, 0.3);
-    --shadow-glow-orange: 0 0 15px rgba(255, 90, 0, 0.5);
+    --shadow-glow-orange: 0 0 15px rgba(234, 166, 57, 0.5);
 }
 
 * {
@@ -23,26 +25,37 @@ html,
 body,
 #root {
     width: 100%;
-    height: 100vh;
-    height: 100dvh;
+    min-height: 100vh;
     margin: 0;
     padding: 0;
-    overflow: hidden !important;
-    -ms-overflow-style: none;
-    scrollbar-width: none;
+    overflow-x: clip;
+    overflow-y: auto;
 }
 
-/* Hide scrollbar for Chrome, Safari and Opera */
+/* Custom sleek golden scrollbar */
 ::-webkit-scrollbar {
-    display: none;
+    width: 6px;
+    height: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(234, 166, 57, 0.45);
+    border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(234, 166, 57, 0.85);
 }
 
 body {
-    font-family: 'Times New Roman', Times, serif;
-    color: #090707;
-    overflow-y: hidden;
-    overflow-x: hidden;
-    background-color: #000;
+    font-family: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    color: #18181b;
+    overflow-x: clip;
+    background-color: #0c0a09;
     -webkit-user-select: none;
     user-select: none;
 }

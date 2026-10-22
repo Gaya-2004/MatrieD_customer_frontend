@@ -236,7 +236,7 @@ const TakeAwayOrderSuccess = () => {
             <p className="os-subtitle" style={{ fontSize: '18px', color: '#555', marginBottom: '12px' }}>
               {translate('Visit again!', 'மீண்டும் வருக!')}
             </p>
-            <p className="os-redirect-notice" style={{ fontSize: '15px', color: '#1a7a3b', marginBottom: '32px', fontWeight: '600' }}>
+            <p className="os-redirect-notice" style={{ fontSize: '15px', color: '#b45309', marginBottom: '32px', fontWeight: '600' }}>
               <i className="fa-solid fa-check" style={{ marginRight: '8px' }}></i>
               {translate(`Order Completed!`, `ஆர்டர் முடிந்தது!`)}
             </p>
@@ -383,7 +383,7 @@ const TakeAwayOrderSuccess = () => {
 
             <div className="live-track-footer">
               <p>{translate('Please wait near the counter. We will notify you when it\'s ready.', 'தயவுசெய்து கவுண்டருக்கு அருகில் காத்திருக்கவும்.')}</p>
-              <button className="new-os-back" onClick={handleCallRestaurant} style={{ color: '#ff4e00', marginBottom: 0, fontWeight: 700 }}>
+              <button className="new-os-back" onClick={handleCallRestaurant} style={{ color: '#EAA639', marginBottom: 0, fontWeight: 700 }}>
                 <i className="fa-solid fa-phone"></i> {translate('Need Help?', 'உதவி தேவையா?')}
               </button>
             </div>

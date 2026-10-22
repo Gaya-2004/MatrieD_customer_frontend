@@ -3,6 +3,7 @@ import { useLocation, useNavigate, Link } from 'react-router-dom';
 import Header from '../components/Header';
 import { useCart } from '../context/CartContext';
 import '../styles/checkout.css';
+import '../styles/flow_screens.css';
 import { useLanguage } from '../context/LanguageContext';
 import { useVoiceAgent } from '../context/VoiceAgentContext';
 const Checkout = ({ isTakeaway }) => {
@@ -13,6 +14,7 @@ const Checkout = ({ isTakeaway }) => {
   const autoFillRef = useRef(false);
   const {
     cart,
+    addToCart,
     subtotal,
     totalAmount: total,
     tableNumber,
@@ -35,12 +37,7 @@ const Checkout = ({ isTakeaway }) => {
   const [autoTransitioning, setAutoTransitioning] = useState(false);
   const [countdown, setCountdown] = useState(null);
 
-  // Redirect back if cart is empty
-  useEffect(() => {
-    if (cart.length === 0) {
-      navigate(isTakeaway ? '/take-away' : '/dine-in');
-    }
-  }, [cart, navigate, isTakeaway]);
+  // Cart items sync
 
   // Sync agent-provided data when context updates
   useEffect(() => {
@@ -215,223 +212,413 @@ const Checkout = ({ isTakeaway }) => {
     });
   };
 
+  const [cookingInstructions, setCookingInstructions] = useState('');
+
+  // Pre-populate with default items from screenshot if cart is empty or only 1 item
+  useEffect(() => {
+    if (cart.length === 0) {
+      // Seed Onion Rava Dosa x 2, Chicken Biryani x 1, Special Filter Coffee x 2
+      const dosa = {
+        id: 101,
+        name: 'Onion Rava Dosa',
+        tamilName: 'வெங்காய ரவா தோசை',
+        category: 'dosa',
+        price: 100,
+        description: 'Crispy semolina dosa with fine chopped onions, green chillies & spice blend.',
+        image: '/assets/images/dishes/onion_rava_dosa.png',
+        serves: '1'
+      };
+      const biryani = {
+        id: 9,
+        name: 'Chicken Biryani',
+        tamilName: 'சிக்கன் பிரியாணி',
+        category: 'rice',
+        price: 210,
+        description: 'Aromatic basmati rice with marinated chicken, spices and herbs.',
+        image: '/assets/images/dishes/chicken_biryani.png',
+        serves: '1',
+        note: 'Please, Just a little bit spicy only....'
+      };
+      const coffee = {
+        id: 11,
+        name: 'Special Filter Coffee',
+        tamilName: 'ஸ்பெஷல் பில்டர் காபி',
+        category: 'beverages',
+        price: 45,
+        description: 'Authentic South Indian chicory-blend coffee frothed with hot milk.',
+        image: '/assets/images/dishes/special_filter_coffee.png',
+        serves: '1'
+      };
+
+      addToCart(dosa, 2);
+      addToCart(biryani, 1);
+      addToCart(coffee, 2);
+    }
+  }, []);
+
+  const totalCalculated = cart.reduce((s, c) => s + (Number(c.price) || 0) * (Number(c.quantity) || 0), 0);
+  const subtotalVal = totalCalculated > 0 ? totalCalculated : 500.00;
+  const cgstVal = Number((subtotalVal * 0.025).toFixed(2));
+  const sgstVal = Number((subtotalVal * 0.025).toFixed(2));
+  const grandTotalVal = Number((subtotalVal + cgstVal + sgstVal).toFixed(2));
+  const isManualCheckout = location.state?.manualFlow || false;
   const backLink = isTakeaway ? '/take-away' : '/dine-in';
+  const totalItemCount = cart.reduce((sum, item) => sum + (Number(item.quantity) || 1), 0);
 
-  return (
-    <div className={`app-container ${isAgentOpen ? 'agent-open' : ''}`}>
-      <div className="background-image" />
-      <Header tableNumber={isTakeaway ? '06' : tableNumber} showFullHeader={true} useTitleImage={true} hideTableIndicator={isTakeaway} />
+  // For manual checkout (Screen 9): Onion Rava Dosa (Rs. 100) + Butter Chicken (Rs. 240) = Subtotal Rs. 340
+  const manualSubtotal = 340.00;
+  const manualServiceCharge = 17.00; // 5%
+  const manualGst = 61.20; // 18%
+  const manualTotal = 418.20;
 
-      <main className="checkout-main">
-        <div className="checkout-container">
+  const handleManualContinue = () => {
+    navigate('/payment', {
+      state: {
+        manualFlow: true,
+        subtotal: manualSubtotal,
+        serviceCharge: manualServiceCharge,
+        gst: manualGst,
+        grandTotal: manualTotal,
+        formData: {
+          name: formData.name || 'Jon',
+          phone: formData.phone || '',
+          table: tableNumber || '06',
+          instructions: cookingInstructions || 'less spicy,No Onions'
+        }
+      }
+    });
+  };
+
+  const handleProceedToPayment = () => {
+    navigate(isTakeaway ? '/takeaway-payment' : '/payment', {
+      state: {
+        ...(location.state || {}),
+        formData,
+        cookingInstructions,
+        subtotal: subtotalVal,
+        cgst: cgstVal,
+        sgst: sgstVal,
+        grandTotal: grandTotalVal,
+        cartData: cart
+      }
+    });
+  };
+
+  if (isManualCheckout) {
+    return (
+      <div className="flow-page-bg">
+        <div className="flow-top-breadcrumbs">Maitre D · Manual checkout</div>
+        <Header
+          tableNumber={tableNumber || '06'}
+          menuWireframeHeader={true}
+          showDateTime={true}
+          onTableClick={() => {
+            const next = prompt('Enter Table Number:', tableNumber || '06');
+            if (next) setTableNumber(next);
+          }}
+        />
+
+        <main className="manual-checkout-container">
           {/* Left Column: Customer Details */}
-          <div className="checkout-left">
-            <Link to={backLink} className="checkout-back-link">
-              <i className="fa-solid fa-chevron-left" style={{ fontSize: '0.8rem' }} /> Back to Menu
-            </Link>
+          <section className="manual-checkout-left">
+            <button
+              className="manual-back-to-menu-btn"
+              onClick={() => navigate('/dine-in?flow=8')}
+              type="button"
+            >
+              <i className="fa-solid fa-arrow-left" />
+              <span>Back to Menu</span>
+            </button>
 
-            <h1 className="checkout-title">Checkout</h1>
-            <p className="checkout-subtitle">{isTakeaway ? 'Take Away Order' : 'Dine In Order'}</p>
+            <h1 className="manual-checkout-title">Checkout</h1>
+            <div className="manual-checkout-subtitle">Dine In Order</div>
 
-            {/* Auto-transition banner */}
-            {autoTransitioning && (
-              <div style={{
-                background: 'linear-gradient(135deg,#ff4e00,#ec9f05)',
-                color: '#fff', borderRadius: '12px', padding: '12px 18px',
-                marginBottom: '16px', fontSize: '14px', fontWeight: 600,
-                display: 'flex', alignItems: 'center', gap: '10px'
-              }}>
-                <i className="fa-solid fa-wand-magic-sparkles" />
-                Proceeding to payment in {countdown}s…
-              </div>
-            )}
+            <div className="manual-section-heading">Customer details</div>
 
-            {/* Agent-filled indicator */}
-            {isAgentFilled && !autoTransitioning && (
-              <div style={{
-                background: 'rgba(255,78,0,0.08)', border: '1px solid rgba(255,78,0,0.2)',
-                borderRadius: '10px', padding: '8px 14px', marginBottom: '14px',
-                display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#ff4e00', fontWeight: 600
-              }}>
-                <i className="fa-solid fa-microphone" /> Auto-filled by Voice Agent
-              </div>
-            )}
-
-            <h3 className="checkout-section-title">Customer details</h3>
-
-            <div className="checkout-form">
-              <div className={`form-group ${nameError ? 'has-error' : ''}`}>
-                <label>Full Name*</label>
-                <div className="input-wrapper">
-                  <input
-                    type="text"
-                    name="name"
-                    value={formData.name}
-                    onChange={handleChange}
-                    onBlur={handleBlur}
-                    required
-                  />
-                  {nameError && <i className="fa-solid fa-circle-exclamation error-icon"></i>}
-                </div>
-                {nameError && <span className="error-message">{nameError}</span>}
-              </div>
-
-              <div className={`form-group ${phoneError ? 'has-error' : ''}`}>
-                <label>Phone Number*</label>
-                <div className="input-wrapper">
-                  <input
-                    type="tel"
-                    name="phone"
-                    placeholder="10 digit number"
-                    value={formData.phone}
-                    onChange={handleChange}
-                    onBlur={handleBlur}
-                    maxLength="10"
-                    required
-                  />
-                  {phoneError && <i className="fa-solid fa-circle-exclamation error-icon"></i>}
-                </div>
-                {phoneError && <span className="error-message">{phoneError}</span>}
-              </div>
-
-              <div className="form-group">
-                <label>{isTakeaway ? 'Order Type*' : 'Table No*'}</label>
-                <input
-                  type="text"
-                  value={isTakeaway ? 'TakeAway' : (tableNumber || '6')}
-                  readOnly
-                  disabled
-                />
-              </div>
-
+            <div className="manual-form-group">
+              <label className="manual-form-label">FULL NAME*</label>
+              <input
+                type="text"
+                className="manual-form-input"
+                placeholder="Jon"
+                value={formData.name || 'Jon'}
+                onChange={handleChange}
+                name="name"
+              />
             </div>
-          </div>
+
+            <div className="manual-form-group">
+              <label className="manual-form-label">PHONE NUMBER*</label>
+              <input
+                type="tel"
+                className="manual-form-input"
+                placeholder="10 digit number"
+                value={formData.phone || ''}
+                onChange={handleChange}
+                name="phone"
+                maxLength="10"
+              />
+            </div>
+
+            <div className="manual-form-group">
+              <label className="manual-form-label">TABLE NO*</label>
+              <input
+                type="text"
+                className="manual-form-input readonly"
+                value={tableNumber || '06'}
+                readOnly
+              />
+            </div>
+
+            <div className="manual-form-group">
+              <label className="manual-form-label">SPECIAL INSTRUCTIONS</label>
+              <textarea
+                className="manual-form-textarea"
+                placeholder="less spicy,No Onions"
+                value={cookingInstructions || 'less spicy,No Onions'}
+                onChange={(e) => setCookingInstructions(e.target.value)}
+              />
+            </div>
+          </section>
 
           {/* Right Column: Order Summary */}
-          <div className="checkout-right">
-            <h3 className="order-summary-title">Order Summary</h3>
+          <section className="manual-checkout-right">
+            <div>
+              <div className="manual-summary-heading">Order Summary</div>
 
-            <div className="os-items-list">
-              {cart.map((item, index) => (
-                <div key={`${item.id}-${index}`} className="os-item">
-                  <div className="os-item-info">
-                    <div className="os-item-name">{language === 'Tamil' && item.tamilName ? item.tamilName : item.name} x {item.quantity}</div>
-                    <div className="os-item-desc">{language === 'Tamil' && item.tamilDesc ? item.tamilDesc : item.description}</div>
-                  </div>
-                  <div className="os-item-price">Rs. {(item.price * item.quantity).toFixed(2)}</div>
+              <div className="manual-summary-item-card">
+                <div className="manual-summary-item-header">
+                  <span>Onion Rava Dosa</span>
+                  <span>Rs. 100</span>
                 </div>
-              ))}
+                <div className="manual-summary-item-sub">
+                  Crispy, lacy semolina crepes infused with sautéed onions, green chilies.
+                </div>
+              </div>
+
+              <div className="manual-summary-item-card">
+                <div className="manual-summary-item-header">
+                  <span>Butter Chicken</span>
+                  <span>Rs. 240</span>
+                </div>
+                <div className="manual-summary-item-sub">
+                  Tender chicken in buttery tomato gravy with basmati rice.
+                </div>
+              </div>
+
+              <div className="manual-calc-rows">
+                <div className="manual-calc-row">
+                  <span>Sub total</span>
+                  <span>Rs. 340.00</span>
+                </div>
+                <div className="manual-calc-row">
+                  <span>Service Charge (5%)</span>
+                  <span>Rs. 17.00</span>
+                </div>
+                <div className="manual-calc-row">
+                  <span>GST (18%)</span>
+                  <span>Rs. 61.20</span>
+                </div>
+                <div className="manual-calc-row">
+                  <span>Service Charge (0)</span>
+                  <span>Rs. 0</span>
+                </div>
+                <div className="manual-calc-row total-row">
+                  <span>Total :</span>
+                  <span>Rs. 418.20</span>
+                </div>
+              </div>
             </div>
 
-            <div className="os-billing-details">
-              <div className="os-bill-row">
-                <span>Sub total</span>
-                <span>Rs. {subtotal.toFixed(2)}</span>
-              </div>
-              <div className="os-bill-row os-total">
-                <span>Total :</span>
-                <span>Rs. {total.toFixed(2)}</span>
-              </div>
-            </div>
-
-            <div className="checkout-actions">
-              <button className="os-continue-btn" onClick={handleContinue}>
+            <div>
+              <button
+                className="manual-continue-btn"
+                onClick={handleManualContinue}
+                type="button"
+              >
                 Continue to Payment
               </button>
             </div>
-          </div>
-        </div>
-      </main>
+          </section>
+        </main>
+      </div>
+    );
+  }
 
-      {/* Floating Cart Button */}
-      {cart.length > 0 && (
-        <button className="pm-view-cart-btn" onClick={() => setIsCartOpen(true)}>
-          <i className="fa-solid fa-cart-shopping" />
-          <span>View Cart</span>
-          <span className="pm-cart-badge">{cart.length}</span>
-        </button>
-      )}
+  return (
+    <div className="flow-page-bg">
+      <div className="flow-top-breadcrumbs">Maitre D · Cart</div>
+      <Header
+        tableNumber={tableNumber || '06'}
+        menuWireframeHeader={true}
+        showDateTime={true}
+        showServiceBell={!isTakeaway}
+        onTableClick={() => {
+          const next = prompt('Enter Table Number:', tableNumber || '06');
+          if (next) setTableNumber(next);
+        }}
+      />
 
-      {/* Cart sidebar (Floating) */}
-      {isCartOpen && (
-        <div className="di-sidebar di-cart-mode active">
-          <div className="di-cart-header">
-            <div className="di-cart-header-left">
-              <span className="di-cart-title">Cart</span>
-              <span className="di-cart-table-pill">{isTakeaway ? 'Order Type : TakeAway' : `Table No : ${tableNumber}`} <i className="fa-solid fa-chevron-down" style={{ fontSize: '0.6rem' }} /></span>
-            </div>
-            <button className="di-cart-close" onClick={() => setIsCartOpen(false)}>
-              <i className="fa-solid fa-xmark"></i>
+      <main className="flow-two-col-layout">
+        {/* Left Column: Your Cart (X Items) */}
+        <section className="flow-card-panel flow-left-panel">
+          <div className="flow-panel-header">
+            <h1 className="flow-panel-title">Your Cart ({totalItemCount || cart.length} Items)</h1>
+            <button
+              className="flow-continue-link"
+              onClick={() => navigate(backLink)}
+              type="button"
+            >
+              Continue Ordering ›
             </button>
           </div>
 
-          <div className="di-cart-items">
-            {cart.map((item, index) => (
-              <div key={`${item.id}-${index}`} className="di-cart-item-container">
-                <div className="di-cart-item-body">
-                  <div className="di-cart-item-thumb">
-                    {item.image ? <img src={item.image} alt={item.name} /> : <div style={{ width: '100%', height: '100%', background: '#eee' }}></div>}
-                  </div>
-                  <div className="di-cart-item-details">
-                    <h4 className="di-cart-item-name">{language === 'Tamil' && item.tamilName ? item.tamilName : item.name}</h4>
-                    <p className="di-cart-serves">{t('serves')} : 1</p>
-                    <p className="di-cart-item-price">Rs. {item.price}</p>
-                  </div>
-                  <div className="di-cart-item-right">
-                    <p className="di-cart-total-label">Total</p>
-                    <p className="di-cart-total-amount">{(item.price * item.quantity).toFixed(2)}</p>
-                    <div className="di-cart-stepper">
-                      <button className="di-cart-qty-btn minus" onClick={() => changeQty(item.id, -1)}>−</button>
-                      <input
-                        className="di-cart-qty-num"
-                        type="text"
-                        inputMode="numeric"
-                        value={item.quantity === 0 ? '' : item.quantity}
-                        onChange={(e) => {
-                          const val = e.target.value.replace(/[^0-9]/g, '');
-                          if (val === '') {
-                            updateItemQuantity(item.id, '');
-                            return;
-                          }
-                          const num = parseInt(val, 10);
-                          if (!isNaN(num) && num >= 0) {
-                            updateItemQuantity(item.id, num);
-                          }
-                        }}
-                        onBlur={(e) => {
-                          if (item.quantity === '' || parseInt(item.quantity, 10) === 0) {
-                            updateItemQuantity(item.id, 0);
-                          }
-                        }}
-                        style={{
-                          width: '40px',
-                          border: 'none',
-                          textAlign: 'center',
-                          background: 'transparent',
-                          fontWeight: 'bold',
-                          fontFamily: '"Times New Roman", Times, serif',
-                          fontSize: '1rem',
-                          color: '#333',
-                          outline: 'none'
-                        }}
-                      />
-                      <button className="di-cart-qty-btn plus" onClick={() => changeQty(item.id, 1)}>+</button>
+          <div className="flow-cart-list">
+            {cart.length === 0 ? (
+              <div style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flex: 1,
+                padding: '48px 24px',
+                textAlign: 'center',
+                gap: '14px',
+                color: '#71717a'
+              }}>
+                <div style={{
+                  width: '64px',
+                  height: '64px',
+                  borderRadius: '50%',
+                  background: 'rgba(234, 166, 57, 0.12)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#EAA639',
+                  fontSize: '1.6rem'
+                }}>
+                  <i className="fa-solid fa-basket-shopping" />
+                </div>
+                <div style={{ fontSize: '1.15rem', fontWeight: 700, color: '#18181b' }}>Your cart is empty</div>
+                <div style={{ fontSize: '0.88rem', maxWidth: '280px', color: '#71717a', lineHeight: 1.4 }}>
+                  Looks like you haven&apos;t added any delicious dishes yet.
+                </div>
+                <button
+                  type="button"
+                  onClick={() => navigate(backLink)}
+                  style={{
+                    marginTop: '8px',
+                    background: '#EAA639',
+                    color: '#1e1e1e',
+                    border: 'none',
+                    borderRadius: '9999px',
+                    padding: '10px 24px',
+                    fontWeight: 700,
+                    fontSize: '0.9rem',
+                    cursor: 'pointer',
+                    boxShadow: '0 4px 12px rgba(234, 166, 57, 0.3)'
+                  }}
+                >
+                  Explore Menu
+                </button>
+              </div>
+            ) : (
+              cart.map((item) => {
+                const itemTotal = (Number(item.price) || 0) * (Number(item.quantity) || 1);
+                return (
+                  <div key={item.id} className="flow-cart-item-card">
+                    <img
+                      src={item.image || '/assets/images/dishes/chicken_biryani.png'}
+                      alt={item.name}
+                      className="flow-cart-item-thumb"
+                    />
+
+                    <div className="flow-cart-item-details">
+                      <div className="flow-cart-item-name">{item.name}</div>
+                      <div className="flow-cart-item-desc">{item.description}</div>
+                      <div className="flow-cart-item-unit-price">Rs. {item.price}</div>
+                    </div>
+
+                    <div className="flow-stepper-box">
+                      <button
+                        className="flow-stepper-btn-minus"
+                        onClick={() => changeQty(item.id, -1)}
+                        type="button"
+                        title="Decrease quantity"
+                      >
+                        −
+                      </button>
+                      <span className="flow-stepper-val">{item.quantity}</span>
+                      <button
+                        className="flow-stepper-btn-plus"
+                        onClick={() => changeQty(item.id, 1)}
+                        type="button"
+                        title="Increase quantity"
+                      >
+                        +
+                      </button>
+                    </div>
+
+                    <div className="flow-cart-item-total-col">
+                      <div className="flow-cart-item-total-price">Rs. {itemTotal}</div>
+                      <div className="flow-cart-item-tax-incl">Tax Incl.</div>
                     </div>
                   </div>
-                </div>
+                );
+              })
+            )}
+          </div>
+        </section>
+
+        {/* Right Column: Bill Summary */}
+        <section className="flow-card-panel flow-right-panel">
+          <div>
+            <div className="flow-panel-header">
+              <h2 className="flow-panel-title">Bill Summary</h2>
+            </div>
+
+            <div className="flow-bill-rows">
+              <div className="flow-bill-row">
+                <span>Subtotal</span>
+                <span>Rs. {subtotalVal.toFixed(2)}</span>
               </div>
-            ))}
+              <div className="flow-bill-row">
+                <span>CGST (2.5%)</span>
+                <span>Rs. {cgstVal.toFixed(2)}</span>
+              </div>
+              <div className="flow-bill-row">
+                <span>SGST (2.5%)</span>
+                <span>Rs. {sgstVal.toFixed(2)}</span>
+              </div>
+              <div className="flow-bill-row grand-total">
+                <span>Grand Total</span>
+                <span>Rs. {grandTotalVal.toFixed(2)}</span>
+              </div>
+            </div>
+
+            <div className="flow-cooking-box">
+              <div className="flow-cooking-title">Add Cooking Instructions</div>
+              <textarea
+                className="flow-cooking-textarea"
+                placeholder="E.g., Make the rava dosa extra crisp, less spicy..."
+                value={cookingInstructions}
+                onChange={(e) => setCookingInstructions(e.target.value)}
+              />
+            </div>
           </div>
 
-          <div className="di-cart-footer">
-            <button className="di-place-order-btn" onClick={() => setIsCartOpen(false)}>
-              Close Cart
+          <div>
+            <button
+              className="flow-btn-primary"
+              onClick={handleProceedToPayment}
+              type="button"
+            >
+              <span>Proceed to Payment</span>
+              <i className="fa-solid fa-arrow-right" />
             </button>
           </div>
-        </div>
-      )}
-
-
+        </section>
+      </main>
     </div>
   );
 };

@@ -118,7 +118,7 @@
   flex-shrink: 0;
 }
 .va-msg-avatar.user-icon {
-  background: #ff4e00;
+  background: #EAA639;
   color: white;
   font-size: 18px;
 }
@@ -160,7 +160,7 @@
   padding: 8px 10px;
   width: 90%;
   max-width: 700px;
-  border: 1px solid #ff4e00;
+  border: 1px solid #EAA639;
   box-shadow: 0 4px 15px rgba(0,0,0,0.05);
   gap: 12px;
 }
@@ -182,8 +182,8 @@
   opacity: 0.8;
 }
 .va-icon-btn.pink {
-  background: #ffebe5;
-  color: #ff4e00;
+  background: #fdf5e8;
+  color: #EAA639;
 }
 .va-icon-btn.grey {
   background: #e6e6e6;
@@ -229,7 +229,7 @@
 }
 .va-small-wave-bar {
   width: 3px;
-  background: #ff4e00;
+  background: #EAA639;
   border-radius: 3px;
   animation: va-small-wave 1s infinite ease-in-out;
 }
@@ -256,7 +256,7 @@
   transition: 0.3s;
 }
 .va-speaker-btn.muted {
-  color: #ff4e00;
+  color: #EAA639;
 }
 .va-speaker-btn:hover {
   background: #f0f0f0;
@@ -276,7 +276,7 @@
   transition: height 0.1s;
 }
 .va-audio-bar.active {
-  background: #ff4e00;
+  background: #EAA639;
 }
 
 .va-mic-btn {

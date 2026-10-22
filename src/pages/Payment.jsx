@@ -4,10 +4,12 @@ import Header from '../components/Header';
 import { useCart } from '../context/CartContext';
 import { useVoiceAgent } from '../context/VoiceAgentContext';
 import '../styles/payment.css';
+import '../styles/flow_screens.css';
 
-const Payment = () => {
+const Payment = ({ isTakeaway: propIsTakeaway }) => {
   const location = useLocation();
   const navigate = useNavigate();
+  const isTakeaway = propIsTakeaway !== undefined ? propIsTakeaway : (location.pathname.includes('takeaway') || location.pathname.includes('take-away'));
   const { agentState, setOrderPlaced, startOrderTracking, setFlowStage } = useVoiceAgent();
   const {
     cart,
@@ -35,9 +37,9 @@ const Payment = () => {
 
   useEffect(() => {
     if (cart.length === 0) {
-      navigate('/dine-in', { replace: true });
+      navigate(isTakeaway ? '/take-away' : '/dine-in', { replace: true });
     }
-  }, [cart, navigate]);
+  }, [cart, navigate, isTakeaway]);
 
   useEffect(() => {
     setIsCartOpen(false);
@@ -93,7 +95,7 @@ const Payment = () => {
 
     if (methodToUse === 'Cash') {
       const orderData = {
-        table_number: tableNumber || '06',
+        table_number: isTakeaway ? 'Take Away' : (tableNumber || '06'),
         payment_method: 'Cash',
         phone: formData.phone || '',
         cart: cart.map(item => ({
@@ -120,10 +122,10 @@ const Payment = () => {
         const generatedOrderId = data.orderId || (dbId ? `ORD-${String(dbId).padStart(6, '0')}` : `ORD-${Math.floor(100000 + Math.random() * 900000)}`);
         sessionStorage.setItem('chatbot_flow_stage', 'payment_done');
         localStorage.setItem('active_order_id', generatedOrderId);
-        localStorage.setItem('active_order_type', 'dine-in');
+        localStorage.setItem('active_order_type', isTakeaway ? 'takeaway' : 'dine-in');
         localStorage.setItem('active_table_number', tableNumber || '06');
         setFlowStage('ORDER_TRACKING');
-        navigate('/order-success', {
+        navigate(isTakeaway ? '/takeaway-order-success' : '/order-success', {
           state: {
             orderId: generatedOrderId,
             cartData: cart,
@@ -135,7 +137,7 @@ const Payment = () => {
         console.error('Order placement error:', err);
         sessionStorage.setItem('chatbot_flow_stage', 'payment_done');
         isSubmittingRef.current = false;
-        navigate('/order-success', {
+        navigate(isTakeaway ? '/takeaway-order-success' : '/order-success', {
           state: {
             orderId: `ORD-${Math.floor(100000 + Math.random() * 900000)}`,
             cartData: cart,
@@ -148,7 +150,7 @@ const Payment = () => {
 
     // Razorpay Integration
     const orderData = {
-      table_number: tableNumber || '06',
+      table_number: isTakeaway ? 'Take Away' : (tableNumber || '06'),
       payment_method: 'Razorpay',
       phone: formData.phone || '',
       cart: cart.map(item => ({
@@ -220,7 +222,7 @@ const Payment = () => {
       if (!razorpayKeyId || !rzpOrder.success) {
         console.warn('Razorpay configuration or order creation failed. Redirecting to payment failed page.');
         isSubmittingRef.current = false;
-        navigate('/payment-failed', { state: { total, isTakeAway: false, formData, cart } });
+        navigate('/payment-failed', { state: { total, isTakeAway: isTakeaway, formData, cart } });
         return;
       }
 
@@ -228,18 +230,18 @@ const Payment = () => {
         key: razorpayKeyId,
         amount: rzpOrder.order.amount,
         currency: rzpOrder.order.currency,
-        name: 'Data Udipi',
+        name: 'MaitreD',
         description: 'Food Order Payment',
         image: '',
         order_id: rzpOrder.order.id,
         handler: async function (response) {
           sessionStorage.setItem('chatbot_flow_stage', 'payment_done');
           localStorage.setItem('active_order_id', generatedOrderId);
-          localStorage.setItem('active_order_type', 'dine-in');
+          localStorage.setItem('active_order_type', isTakeaway ? 'takeaway' : 'dine-in');
           localStorage.setItem('active_table_number', tableNumber || '06');
           setFlowStage('ORDER_TRACKING');
           // On successful payment
-          navigate('/order-success', {
+          navigate(isTakeaway ? '/takeaway-order-success' : '/order-success', {
             state: {
               orderId: generatedOrderId,
               cartData: cart,
@@ -252,7 +254,7 @@ const Payment = () => {
           contact: formData.phone || ''
         },
         theme: {
-          color: '#ff4e00'
+          color: '#EAA639'
         }
       };
 
@@ -260,7 +262,7 @@ const Payment = () => {
       rzp.on('payment.failed', function (response) {
         console.error('Payment failed:', response.error);
         isSubmittingRef.current = false;
-        navigate('/payment-failed', { state: { total, isTakeAway: false, formData, cart } });
+        navigate('/payment-failed', { state: { total, isTakeAway: isTakeaway, formData, cart } });
       });
       rzp.open();
       isSubmittingRef.current = false;
@@ -268,193 +270,342 @@ const Payment = () => {
     } catch (err) {
       console.error('Payment error:', err);
       isSubmittingRef.current = false;
-      navigate('/payment-failed', { state: { total, isTakeAway: false, formData, cart } });
+      navigate('/payment-failed', { state: { total, isTakeAway: isTakeaway, formData, cart } });
     }
   };
 
-  return (
-    <div className="payment-page">
-      <div className="payment-bg" />
-      <Header tableNumber={tableNumber} showFullHeader={true} useTitleImage={true} showDateTime={true} />
+  const isManualPayment = location.state?.manualFlow || false;
+  const initialMethod = location.state?.initialMethod || 'Cash';
+  const grandTotalFromState = location.state?.grandTotal || (isManualPayment ? 418.20 : (total || 525.00));
+  const subtotalFromState = location.state?.subtotal || (isManualPayment ? 340.00 : (subtotal || 500.00));
 
-      <main className="payment-main">
-        <div className="payment-card">
-          <Link to="/checkout" state={location.state} className="payment-back-link">
-            ← Back to Checkout
-          </Link>
+  useEffect(() => {
+    if (location.state?.initialMethod) {
+      setSelectedMethod(location.state.initialMethod);
+    }
+  }, [location.state?.initialMethod]);
 
-          <h2 className="payment-title">Payment</h2>
-          <p className="payment-subtitle">Choose Your Payment Method</p>
+  if (isManualPayment) {
+    const isUpi = selectedMethod === 'UPI';
 
-          <div className="payment-methods">
-            <div
-              className={`payment-method-card ${selectedMethod === 'Cash' ? 'selected' : ''}`}
-              onClick={() => {
-                setSelectedMethod('Cash');
-                sessionStorage.setItem('payment_method', 'Cash');
-              }}
+    const handleManualConfirm = () => {
+      navigate('/order-success', {
+        state: {
+          manualFlow: true,
+          isManualOrderConfirmed: true,
+          orderId: '1042',
+          prepTime: '15 – 20 Mins',
+          paymentMethod: selectedMethod,
+          total: 418.20,
+          subtotal: 340.00
+        }
+      });
+    };
+
+    return (
+      <div className="flow-page-bg">
+        <div className="flow-top-breadcrumbs">
+          {isUpi ? 'Maitre D · Manual UPI payment' : 'Maitre D · Manual cash payment'}
+        </div>
+        <Header
+          tableNumber={tableNumber || '06'}
+          menuWireframeHeader={true}
+          showDateTime={true}
+          showServiceBell={true}
+          onTableClick={() => {
+            const next = prompt('Enter Table Number:', tableNumber || '06');
+            if (next) setTableNumber(next);
+          }}
+        />
+
+        <main className="manual-payment-center-wrap">
+          <div className="manual-payment-card">
+            <button
+              className="manual-back-to-menu-btn"
+              onClick={() => navigate('/dine-in')}
+              type="button"
             >
-              <div className="pm-icon-wrap">
-                <i className="fa-solid fa-money-bill-wave"></i>
+              <i className="fa-solid fa-arrow-left" />
+              <span>Back to Menu</span>
+            </button>
+
+            <h1 className="manual-payment-title">Payment</h1>
+            <div className="manual-payment-subtitle">Choose Your Payment Method</div>
+
+            {/* Payment Method Cards */}
+            <div className="manual-pm-grid">
+              <div
+                className={`manual-pm-card ${selectedMethod === 'Cash' ? 'selected' : ''}`}
+                onClick={() => setSelectedMethod('Cash')}
+              >
+                <div className="manual-pm-card-top">
+                  <div className="manual-pm-icon-wrap">
+                    <i className="fa-solid fa-money-bill-wave" />
+                  </div>
+                  <div className="flow-radio-circle">
+                    {selectedMethod === 'Cash' && <div className="flow-radio-circle-inner" />}
+                  </div>
+                </div>
+                <div className="manual-pm-card-title">Cash</div>
+                <div className="manual-pm-card-sub">Pay at the counter</div>
               </div>
-              <div>
-                <p className="pm-name">Cash</p>
-                <p className="pm-desc">Pay at the counter</p>
+
+              <div
+                className={`manual-pm-card ${selectedMethod === 'UPI' ? 'selected' : ''}`}
+                onClick={() => setSelectedMethod('UPI')}
+              >
+                <div className="manual-pm-card-top">
+                  <div className="manual-pm-icon-wrap" style={{ background: '#EAA639' }}>
+                    <i className="fa-solid fa-mobile-screen-button" />
+                  </div>
+                  <div className="flow-radio-circle">
+                    {selectedMethod === 'UPI' && <div className="flow-radio-circle-inner" />}
+                  </div>
+                </div>
+                <div className="manual-pm-card-title">UPI</div>
+                <div className="manual-pm-card-sub">GPay, phone pe, Paytym</div>
               </div>
             </div>
+
+            {/* UPI QR & Calculation Section */}
+            {isUpi ? (
+              <div className="manual-upi-body-grid">
+                {/* Left QR Box */}
+                <div className="manual-upi-qr-card">
+                  <div className="manual-upi-qr-frame">
+                    <img
+                      src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=upi://pay?pa=maitred@upi&pn=MaitreD&am=418.20&cu=INR"
+                      alt="UPI QR Code"
+                      className="manual-upi-qr-image"
+                    />
+                    <div className="manual-upi-center-badge">
+                      <i className="fa-solid fa-p" style={{ fontSize: '11px', color: '#fff' }} />
+                    </div>
+                  </div>
+                  <div className="manual-upi-scan-text">SCAN HERE TO PAY!</div>
+                </div>
+
+                {/* Right Calculation Box */}
+                <div className="manual-payment-calc-box upi-calc-box">
+                  <div className="manual-calc-row">
+                    <span>Sub total</span>
+                    <span>Rs. 340.00</span>
+                  </div>
+                  <div className="manual-calc-row">
+                    <span>Service Charge (5%)</span>
+                    <span>Rs. 17.00</span>
+                  </div>
+                  <div className="manual-calc-row">
+                    <span>GST (18%)</span>
+                    <span>Rs. 61.20</span>
+                  </div>
+                  <div className="manual-calc-row">
+                    <span>Service Charge (0)</span>
+                    <span>Rs. 0</span>
+                  </div>
+                  <div className="manual-calc-row total-row">
+                    <span>Total :</span>
+                    <span>Rs. 418.20</span>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              /* Cash Calculation Box */
+              <div className="manual-payment-calc-box">
+                <div className="manual-calc-row">
+                  <span>Sub total</span>
+                  <span>Rs. 340.00</span>
+                </div>
+                <div className="manual-calc-row">
+                  <span>Service Charge (5%)</span>
+                  <span>Rs. 17.00</span>
+                </div>
+                <div className="manual-calc-row">
+                  <span>GST (18%)</span>
+                  <span>Rs. 61.20</span>
+                </div>
+                <div className="manual-calc-row">
+                  <span>Service Charge (0)</span>
+                  <span>Rs. 0</span>
+                </div>
+                <div className="manual-calc-row total-row">
+                  <span>Total :</span>
+                  <span>Rs. 418.20</span>
+                </div>
+              </div>
+            )}
+
+            <button
+              className="manual-confirm-btn"
+              onClick={handleManualConfirm}
+              type="button"
+            >
+              Confirm & Place Order
+            </button>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flow-page-bg">
+      <div className="flow-top-breadcrumbs">Maitre D · Payment</div>
+      <Header
+        tableNumber={tableNumber || '06'}
+        menuWireframeHeader={true}
+        showDateTime={true}
+        showServiceBell={!isTakeaway}
+        onTableClick={() => {
+          const next = prompt('Enter Table Number:', tableNumber || '06');
+          if (next) setTableNumber(next);
+        }}
+      />
+
+      <main className="flow-two-col-layout">
+        {/* Left Column: Choose Payment Method */}
+        <section className="flow-card-panel flow-left-panel">
+          <div className="flow-panel-header">
+            <h1 className="flow-panel-title">Choose Payment Method</h1>
+          </div>
+
+          <div className="flow-payment-options">
+            {/* Option 1: UPI / QR Code */}
             <div
-              className={`payment-method-card ${selectedMethod === 'UPI' ? 'selected' : ''}`}
+              className={`flow-payment-option-card ${selectedMethod === 'UPI' ? 'selected' : ''}`}
               onClick={() => {
                 setSelectedMethod('UPI');
                 sessionStorage.setItem('payment_method', 'UPI');
               }}
             >
-              <div className="pm-icon-wrap">
-                <i className="fa-solid fa-mobile-screen-button"></i>
-              </div>
-              <div>
-                <p className="pm-name">Online Payment</p>
-                <p className="pm-desc">GPay, PhonePe, Cards, UPI</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="payment-billing">
-            <div className="pb-row">
-              <span>Sub total</span>
-              <span>Rs. {subtotal.toFixed(2)}</span>
-            </div>
-            <div className="pb-row pb-total">
-              <span>Total :</span>
-              <span>Rs. {total.toFixed(2)}</span>
-            </div>
-          </div>
-
-          {/* CTA */}
-          <button id="payment-confirm-btn" className="payment-confirm-btn" onClick={handleConfirm}>
-            Confirm & Place Order
-          </button>
-        </div>
-      </main>
-
-      {totalItems > 0 && (
-        <button className="pm-view-cart-btn" onClick={() => setIsCartOpen(true)}>
-          <i className="fa-solid fa-cart-shopping" />
-          <span>View Cart</span>
-          <span className="pm-cart-badge">{totalItems}</span>
-        </button>
-      )}
-
-      {/* Cart sidebar (Floating) - Exact Design Match */}
-      {isCartOpen && (
-        <div className="di-sidebar di-cart-mode active">
-          <div className="di-cart-header">
-            <div className="di-cart-header-left">
-              <span className="di-cart-title">Cart</span>
-              <span className="di-cart-table-pill">Table No : {tableNumber} <i className="fa-solid fa-chevron-down" style={{ fontSize: '0.6rem' }} /></span>
-            </div>
-            <button className="di-cart-close" onClick={() => setIsCartOpen(false)}>✕</button>
-          </div>
-          <div className="di-cart-order-id"># New Order</div>
-
-          <div className="di-order-type-tabs">
-            <button className="di-ot-tab active"><i className="fa-solid fa-utensils" /> Dine In</button>
-            <button className="di-ot-tab" onClick={() => navigate('/take-away')}><i className="fa-solid fa-bag-shopping" /> Take Away</button>
-          </div>
-
-          <div className="di-cart-items">
-            {cart.length === 0
-              ? <p className="di-cart-empty">Cart is empty. Add items from the menu.</p>
-              : cart.map(item => (
-                <div key={item.id} className="di-cart-item-container">
-                  <button className="di-cart-remove-circle" onClick={() => removeCartItem(item.id)}>✕</button>
-                  <div className="di-cart-item-body">
-                    <div className="di-cart-item-thumb">
-                      {item.image ? <img src={item.image} alt={item.name} /> : <span className="di-cart-thumb-emoji">{item.emoji || '🍽️'}</span>}
-                    </div>
-                    <div className="di-cart-item-details">
-                      <p className="di-cart-item-name">{item.name}</p>
-                      <p className="di-cart-serves">Serves : 1</p>
-                      <p className="di-cart-item-price">Rs. {item.price}</p>
-                    </div>
-                    <div className="di-cart-item-right">
-                      <p className="di-cart-total-label">Total</p>
-                      <p className="di-cart-total-amount">{(item.price * item.quantity).toFixed(2)}</p>
-                      <div className="di-cart-stepper">
-                        <button className="di-cart-qty-btn minus" onClick={() => changeQty(item.id, -1)}>−</button>
-                        <input
-                          className="di-cart-qty-num"
-                          type="text"
-                          inputMode="numeric"
-                          value={item.quantity === 0 ? '' : item.quantity}
-                          onChange={(e) => {
-                            let val = e.target.value.replace(/[^0-9]/g, '');
-                            if (val === '') {
-                              updateItemQuantity(item.id, '');
-                              return;
-                            }
-                            const num = parseInt(val, 10);
-                            if (!isNaN(num) && num >= 0) {
-                              updateItemQuantity(item.id, num);
-                            }
-                          }}
-                          onBlur={(e) => {
-                            if (item.quantity === '' || parseInt(item.quantity, 10) === 0) {
-                              updateItemQuantity(item.id, 0);
-                            }
-                          }}
-                          style={{
-                            width: '40px',
-                            border: 'none',
-                            textAlign: 'center',
-                            background: 'transparent',
-                            fontWeight: 'bold',
-                            fontFamily: 'inherit',
-                            fontSize: '1rem',
-                            color: 'inherit',
-                            outline: 'none'
-                          }}
-                        />
-                        <button className="di-cart-qty-btn plus" onClick={() => changeQty(item.id, 1)}>+</button>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="di-cart-note-wrap">
-                    <input className="di-cart-note-input" placeholder="Please, Just a little bit spicy only...." value={item.note || ''} onChange={e => updateNote(item.id, e.target.value)} />
-                  </div>
+              <div className="flow-pm-left">
+                <div className="flow-radio-circle">
+                  {selectedMethod === 'UPI' && <div className="flow-radio-circle-inner" />}
                 </div>
-              ))
-            }
+                <div className="flow-pm-info">
+                  <div className="flow-pm-title">UPI / QR Code</div>
+                  <div className="flow-pm-sub">Google Pay, PhonePe, Paytm, BHIM</div>
+                </div>
+              </div>
+              <div className="flow-pm-icon-right">
+                <i className="fa-solid fa-qrcode" />
+              </div>
+            </div>
+
+            {/* Option 2: Credit / Debit Card */}
+            <div
+              className={`flow-payment-option-card ${selectedMethod === 'Card' ? 'selected' : ''}`}
+              onClick={() => {
+                setSelectedMethod('Card');
+                sessionStorage.setItem('payment_method', 'Card');
+              }}
+            >
+              <div className="flow-pm-left">
+                <div className="flow-radio-circle">
+                  {selectedMethod === 'Card' && <div className="flow-radio-circle-inner" />}
+                </div>
+                <div className="flow-pm-info">
+                  <div className="flow-pm-title">Credit / Debit Card</div>
+                  <div className="flow-pm-sub">Visa, Mastercard, RuPay, Maestro</div>
+                </div>
+              </div>
+              <div className="flow-pm-icon-right">
+                <i className="fa-regular fa-credit-card" />
+              </div>
+            </div>
+
+            {/* Option 3: Pay at Counter (Cash / Card) */}
+            <div
+              className={`flow-payment-option-card ${selectedMethod === 'Cash' ? 'selected' : ''}`}
+              onClick={() => {
+                setSelectedMethod('Cash');
+                sessionStorage.setItem('payment_method', 'Cash');
+              }}
+            >
+              <div className="flow-pm-left">
+                <div className="flow-radio-circle">
+                  {selectedMethod === 'Cash' && <div className="flow-radio-circle-inner" />}
+                </div>
+                <div className="flow-pm-info">
+                  <div className="flow-pm-title">Pay at Counter (Cash / Card)</div>
+                  <div className="flow-pm-sub">{isTakeaway ? 'Pay at pickup counter' : 'Generate token and pay cashier directly'}</div>
+                </div>
+              </div>
+              <div className="flow-pm-icon-right">
+                <i className="fa-solid fa-money-bill" />
+              </div>
+            </div>
           </div>
 
-          <div className="di-cart-footer">
-            <button className="di-add-more-btn" onClick={() => navigate('/dine-in')}>
-              <i className="fa-solid fa-plus" /> Add More Food
-            </button>
-            <button className="di-place-order-btn" onClick={() => setIsCartOpen(false)}>
-              Close & Continue
-            </button>
+          {/* UPI QR Fast Scan Box (visible when UPI selected) */}
+          {selectedMethod === 'UPI' && (
+            <div className="flow-upi-scan-box">
+              <div className="flow-upi-scan-label">UPI QR Fast Scan</div>
+              <div className="flow-upi-scan-content">
+                <img
+                  src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=upi://pay?pa=restaurant@bank&pn=MaitreD&am=525.00&cu=INR"
+                  alt="UPI QR Code"
+                  className="flow-qr-code-img"
+                />
+                <div className="flow-qr-info">
+                  <div className="flow-qr-info-title">Scan this QR code using any UPI app on your phone</div>
+                  <div className="flow-qr-info-desc">Once scanned, wait a few seconds while we confirm the transaction.</div>
+                </div>
+              </div>
+            </div>
+          )}
+        </section>
+
+        {/* Right Column: Summary & Pay */}
+        <section className="flow-card-panel flow-right-panel">
+          <div>
+            <div className="flow-panel-header">
+              <h2 className="flow-panel-title">Summary & Pay</h2>
+            </div>
+
+            <div className="flow-summary-box">
+              <div className="flow-summary-row">
+                <span>Total Amount</span>
+                <span>Rs. {Number(grandTotalFromState).toFixed(2)}</span>
+              </div>
+              <div className="flow-summary-row">
+                <span>{isTakeaway ? 'Order Type' : 'Table No.'}</span>
+                <span>{isTakeaway ? 'Take Away' : `Table ${tableNumber || '06'}`}</span>
+              </div>
+              <div className="flow-summary-row">
+                <span>Payment Mode</span>
+                <span>{selectedMethod === 'UPI' ? 'UPI QR Code' : selectedMethod === 'Card' ? 'Credit / Debit Card' : 'Pay at Counter'}</span>
+              </div>
+            </div>
+
+            <div className="flow-secure-badge">
+              <i className="fa-solid fa-shield-halved" />
+              <span>100% Secure Encrypted Payment Gateway</span>
+            </div>
           </div>
-        </div>
-      )}
 
-      {isPollingCash && (
-        <div style={{
-          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-          backgroundColor: 'rgba(0,0,0,0.8)', zIndex: 9999,
-          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#fff'
-        }}>
-          <div className="spinner" style={{
-            border: '4px solid rgba(255,255,255,0.3)', borderTop: '4px solid #ff4e00',
-            borderRadius: '50%', width: '50px', height: '50px', animation: 'spin 1s linear infinite',
-            marginBottom: '20px'
-          }}></div>
-          <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
-          <h3 style={{ marginBottom: '10px' }}>Waiting for Cash Payment...</h3>
-          <p>Please pay at the counter. The order will be placed once payment is confirmed.</p>
-        </div>
-      )}
+          <div>
+            <button
+              className="flow-btn-primary"
+              onClick={() => handleConfirm(selectedMethod === 'Card' ? 'Razorpay' : selectedMethod)}
+              type="button"
+            >
+              <span>Pay Now (Rs. {Number(grandTotalFromState).toFixed(2)})</span>
+              <i className="fa-solid fa-arrow-right" />
+            </button>
 
+            <div style={{ textAlign: 'center' }}>
+              <button
+                className="flow-back-link-btn"
+                onClick={() => navigate(isTakeaway ? '/takeaway-checkout' : '/checkout', { state: location.state })}
+                type="button"
+              >
+                Back to Checkout
+              </button>
+            </div>
+          </div>
+        </section>
+      </main>
     </div>
   );
 };

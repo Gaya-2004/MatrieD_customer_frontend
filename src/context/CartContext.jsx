@@ -8,7 +8,8 @@ export const CartProvider = ({ children }) => {
   const isTakeaway = location.pathname.includes('takeaway') || location.pathname.includes('take-away');
   const [carts, setCarts] = useState(() => {
     localStorage.removeItem('udipi_carts_v2');
-    const saved = sessionStorage.getItem('udipi_carts_session_v2');
+    localStorage.removeItem('maitred_carts_v2');
+    const saved = sessionStorage.getItem('maitred_carts_session_v2') || sessionStorage.getItem('udipi_carts_session_v2');
     try {
       if (saved && saved !== 'undefined') {
         const parsed = JSON.parse(saved);
@@ -89,7 +90,7 @@ export const CartProvider = ({ children }) => {
 
 
   useEffect(() => {
-    sessionStorage.setItem('udipi_carts_session_v2', JSON.stringify(carts));
+    sessionStorage.setItem('maitred_carts_session_v2', JSON.stringify(carts));
   }, [carts]);
 
   const cart = carts[cartKey] || [];
